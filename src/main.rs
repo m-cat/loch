@@ -11,6 +11,7 @@ fn main() {
     let cli = Cli::from_args();
 
     let input_paths = cli.input();
+    let verbose = cli.verbose();
 
     match loch::check_paths(&input_paths, Some(&cli.to_config())) {
         Ok((urls, info)) => {
@@ -35,14 +36,17 @@ fn main() {
             }
 
             if bad_count > 0 {
-                eprintln!("Link-out check complete: ({}) bad URLs found!", bad_count);
+                eprintln!("({}) bad URLs found!", bad_count);
 
                 process::exit(1);
             } else {
-                println!("Link-out check complete: no bad URLs found!");
+                println!("No bad URLs found!");
 
-                if cli.verbose {
-                    println!("\n{} files and {} URLs were processed", info.num_files, info.num_urls);
+                if verbose {
+                    println!(
+                        "{} files and {} URLs were processed.",
+                        info.num_files, info.num_urls
+                    );
                 }
             }
         }
