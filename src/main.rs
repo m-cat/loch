@@ -1,25 +1,46 @@
 //! # Loch: Link-out check. Pronounced "loch".
 
 mod cli;
+mod util;
 
 use crate::cli::Cli;
-use curl::easy::Easy;
-use loch::{self, FileURL};
+use loch::{self, FileUrl};
+use std::io::Write;
 use std::process;
+use termcolor::{Color, ColorSpec, WriteColor};
 
 fn main() {
     let cli = Cli::from_args();
+    let config = cli.to_config();
 
     let input_paths = cli.input();
     let verbose = cli.verbose();
 
-    match loch::check_paths(&input_paths, Some(&cli.to_config())) {
+    let mut stdout = util::init_color_stdout(config.no_color);
+    let mut stderr = util::init_color_stderr(config.no_color);
+
+    if config.verbose && util::env_no_color() {
+        writeln!(
+            &mut stdout,
+            "NO_COLOR environment variable set, color output disabled."
+        )
+        .unwrap();
+    }
+
+    // Define colors.
+    let mut color1 = ColorSpec::new();
+    color1
+        .set_fg(Some(Color::Green))
+        .set_intense(false)
+        .set_bold(true);
+
+    match loch::check_paths(&input_paths, Some(&config)) {
         Ok((urls, info)) => {
             let mut bad_count = 0;
 
             // Log each URL as "filepath:line:col: URL".
             for url in urls {
-                let FileURL {
+                let FileUrl {
                     url,
                     filepath,
                     bad,
@@ -36,17 +57,23 @@ fn main() {
             }
 
             if bad_count > 0 {
-                eprintln!("({}) bad URLs found!", bad_count);
+                stderr
+                    .set_color(ColorSpec::new().set_fg(Some(Color::Red)))
+                    .unwrap();
+                writeln!(&mut stderr, "({}) bad URLs found!", bad_count).unwrap();
 
                 process::exit(1);
             } else {
-                println!("No bad URLs found!");
+                util::set_and_unset_color(&mut stdout, "No bad URLs found.", &mut color1);
+                writeln!(&mut stdout).unwrap();
 
                 if verbose {
-                    println!(
+                    writeln!(
+                        &mut stdout,
                         "{} files and {} URLs were processed.",
                         info.num_files, info.num_urls
-                    );
+                    )
+                    .unwrap();
                 }
             }
         }

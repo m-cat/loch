@@ -1,66 +1,15 @@
+pub mod util;
+
+mod config;
+
+pub use config::Config;
+
+use curl::easy::Easy;
 use ignore::overrides::OverrideBuilder;
 use ignore::WalkBuilder;
 use std::io;
-
-/// Struct containing configuration parameters for loch.
-#[derive(Default)]
-pub struct Config {
-    // TODO: implement and test.
-    /// Return all `FileURL`s, including the ones that resolved successfully.
-    pub all_urls: bool,
-    // TODO: test.
-    /// A list of file patterns to exclude.
-    pub exclude_paths: Vec<String>,
-    // TODO: implement and test
-    /// A list of URL patterns to exclude.
-    pub exclude_urls: Vec<String>,
-    // TODO: test.
-    /// Follow symbolic links.
-    pub follow: bool,
-    /// List all files visited, populating them into the `Info` struct.
-    pub list_files: bool,
-    // TODO: test.
-    /// Process files and directories that are ignored by default.
-    pub no_ignore: bool,
-    /// Display more information, such as every file name and URL processed.
-    pub verbose: bool,
-}
-
-impl Config {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn all_urls(mut self) -> Self {
-        self.all_urls = true;
-        self
-    }
-
-    pub fn exclude_paths(mut self, exclude_paths: &[&str]) -> Self {
-        self.exclude_paths = exclude_paths.iter().map(|s| s.to_string()).collect();
-        self
-    }
-
-    pub fn exclude_urls(mut self, exclude_urls: &[&str]) -> Self {
-        self.exclude_urls = exclude_urls.iter().map(|s| s.to_string()).collect();
-        self
-    }
-
-    pub fn follow(mut self) -> Self {
-        self.follow = true;
-        self
-    }
-
-    pub fn list_files(mut self) -> Self {
-        self.list_files = true;
-        self
-    }
-
-    pub fn no_ignore(mut self) -> Self {
-        self.no_ignore = true;
-        self
-    }
-}
+use std::io::Write;
+use termcolor::{Color, ColorSpec};
 
 /// Object containing more information about the results of `check_paths`, such as number and names
 /// of files and URLs processed.
@@ -82,7 +31,7 @@ pub struct Info {
 
 /// URL in a File.
 /// If the URL could not be resolved, the `bad` field will be set.
-pub struct FileURL {
+pub struct FileUrl {
     pub url: String,
     pub filepath: String,
     pub bad: bool,
@@ -93,30 +42,49 @@ pub struct FileURL {
 
 // FIXME: loch will check files more than once if they are passed in multiple times.
 /// "Link-out check" all paths passed in.
-/// Returns a list of `FileURL` objects containing the URL and where it was found.
+/// Returns a list of `FileUrl` objects containing the URL and where it was found.
 /// If any path is a directory, will get a list of files in the directory and process the list.
+/// Writes to stdout if `config.verbose` is set.
 pub fn check_paths(
     input_paths: &[&str],
     config: Option<&Config>,
-) -> Result<(Vec<FileURL>, Info), io::Error> {
+) -> Result<(Vec<FileUrl>, Info), io::Error> {
     if input_paths.is_empty() {
         return Ok((Vec::new(), Default::default()));
     }
 
-    // Get configuration options.
     let empty = Vec::new();
-    let verbose = config.map_or(false, |config| config.verbose);
+
+    // Get configuration options.
     let exclude_urls = config.map_or(&empty, |config| &config.exclude_urls);
     let mut files_list: Option<Vec<String>> = if config.map_or(false, |config| config.list_files) {
         Some(Vec::new())
     } else {
         None
     };
+    let no_color = config.map_or(false, |config| config.no_color);
+    let verbose = config.map_or(false, |config| config.verbose);
 
+    // Initialize variables.
+    let mut stdout = util::init_color_stdout(no_color);
     let mut urls = vec![];
     let mut num_files = 0;
     let mut num_urls = 0;
     let mut num_bad_urls = 0;
+
+    // Define colors.
+    let mut color1 = ColorSpec::new();
+    color1
+        .set_fg(Some(Color::Cyan))
+        .set_intense(false)
+        .set_bold(true);
+    let mut color2 = ColorSpec::new();
+    color2.set_fg(Some(Color::Magenta)).set_intense(false);
+    let mut color3 = ColorSpec::new();
+    color3
+        .set_fg(Some(Color::Cyan))
+        .set_intense(false)
+        .set_bold(true);
 
     // Construct the file walker.
     let no_ignore = config.map_or(false, |config| config.no_ignore);
@@ -143,16 +111,27 @@ pub fn check_paths(
         walk_builder.overrides(overrides.build().expect("Excludes provided were invalid"));
     }
 
+    // Print out config values.
     if verbose {
-        println!("Input paths: {:?}", input_paths);
+        util::set_and_unset_color(&mut stdout, "Input paths:", &mut color1);
+        writeln!(stdout, " {:?}", input_paths).unwrap();
+        util::set_and_unset_color(&mut stdout, "Parameters:", &mut color1);
+        writeln!(stdout).unwrap();
 
         // TODO: Add all parameters here.
-        println!("Parameters:");
-        println!("  exclude_paths: {:?}", exclude_paths);
-        println!("  exclude_urls: {:?}", exclude_urls);
-        println!("  follow: {}", follow);
-        println!("  no_ignore: {}", no_ignore);
-        println!("  verbose: {}", verbose);
+        util::set_and_unset_color(&mut stdout, "  exclude-paths:", &mut color2);
+        writeln!(stdout, " {:?}", exclude_paths).unwrap();
+        util::set_and_unset_color(&mut stdout, "  exclude-urls:", &mut color2);
+        writeln!(stdout, " {:?}", exclude_urls).unwrap();
+        util::set_and_unset_color(&mut stdout, "  follow:", &mut color2);
+        writeln!(stdout, " {}", follow).unwrap();
+        util::set_and_unset_color(&mut stdout, "  no-color:", &mut color2);
+        let no_color = config.map_or(false, |config| config.no_color);
+        writeln!(stdout, " {}", no_color).unwrap();
+        util::set_and_unset_color(&mut stdout, "  no-ignore:", &mut color2);
+        writeln!(stdout, " {}", no_ignore).unwrap();
+        util::set_and_unset_color(&mut stdout, "  verbose:", &mut color2);
+        writeln!(stdout, " {}", verbose).unwrap();
     }
 
     // TODO: Use build_parallel instead.
@@ -166,7 +145,9 @@ pub fn check_paths(
 
         if file_type.is_file() {
             if verbose {
-                println!("Checking {}", path_str);
+                util::set_and_unset_color(&mut stdout, "Checking", &mut color3);
+
+                writeln!(stdout, " {}", path_str).unwrap();
             }
 
             // TODO: Handle file.

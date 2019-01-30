@@ -7,7 +7,7 @@ use loch::Config;
 fn split_input(input: Values) -> Vec<String> {
     input
         .map(|s| {
-            s.split(',')
+            s.split(&[' ', ','][..])
                 .filter(|s| !s.is_empty())
                 .map(|s| s.to_string())
                 .collect()
@@ -37,6 +37,8 @@ impl<'a> Cli<'a> {
                  Example: --exclude-urls sub.example.com '*.org' '*.test.com'")
             (@arg follow: -L --follow
                 "Follow symbolic links")
+            (@arg no_color: --("no-color")
+                "Disable color output. Equivalent to setting the NO_COLOR environment variable")
             (@arg no_ignore: --("no-ignore")
                 "Process files and directories that are usually ignored by default, such as hidden \
                  files and files in .gitignore and .ignore. \
@@ -81,6 +83,10 @@ impl<'a> Cli<'a> {
         self.matches.is_present("follow")
     }
 
+    pub fn no_color(&self) -> bool {
+        self.matches.is_present("no_color")
+    }
+
     pub fn no_ignore(&self) -> bool {
         self.matches.is_present("no_ignore")
     }
@@ -98,6 +104,7 @@ impl<'a> Cli<'a> {
             follow: self.follow(),
             // Not for interactive use. Verbose already displays all files.
             list_files: false,
+            no_color: self.no_color(),
             no_ignore: self.no_ignore(),
             verbose: self.verbose(),
         }

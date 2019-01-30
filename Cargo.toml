@@ -13,6 +13,8 @@ version = "0.0.1"
 edition = "2018"
 
 [dependencies]
+atty = "0.2"
 clap = "2"
 curl = "0.4"
 ignore = "0.4"
+termcolor = "1"

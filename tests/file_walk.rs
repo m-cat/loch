@@ -36,7 +36,7 @@ fn exclude_files() {
     let config = Config::new()
         .exclude_urls(&["*"])
         .list_files()
-        .exclude_files(&["*.txt", "test.*", "test"]);
+        .exclude_paths(&["*.txt", "test.*", "test"]);
 
     let (_, info) = loch::check_paths(&[TEST_DIR], Some(&config)).unwrap();
 
