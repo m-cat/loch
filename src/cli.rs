@@ -34,7 +34,7 @@ impl<'a> Cli<'a> {
                  Example: --exclude-paths README.md *.rs")
             (@arg exclude_urls: -E --("exclude-urls") [URLS] +takes_value ...
                 "URL patterns not to check. The '*' wild card can be used with single quotes. \
-                 Example: --exclude-urls sub.example.com '*.org' '*.test.com'")
+                 Example: --exclude-urls sub.example.com '*.org' '*.test.com' example.com/page")
             (@arg follow: -L --follow
                 "Follow symbolic links")
             (@arg no_color: --("no-color")
@@ -65,48 +65,28 @@ impl<'a> Cli<'a> {
         }
     }
 
-    pub fn exclude_paths(&self) -> Vec<String> {
-        match self.matches.values_of("exclude_paths") {
-            Some(values) => values.map(|s| s.to_string()).collect(),
-            None => vec![],
-        }
-    }
-
-    pub fn exclude_urls(&self) -> Vec<String> {
-        match self.matches.values_of("exclude_urls") {
-            Some(values) => split_input(values),
-            None => vec![],
-        }
-    }
-
-    pub fn follow(&self) -> bool {
-        self.matches.is_present("follow")
-    }
-
-    pub fn no_color(&self) -> bool {
-        self.matches.is_present("no_color")
-    }
-
-    pub fn no_ignore(&self) -> bool {
-        self.matches.is_present("no_ignore")
-    }
-
-    pub fn verbose(&self) -> bool {
-        self.matches.is_present("verbose")
-    }
-
     pub fn to_config(&self) -> Config {
         Config {
             // Not for interactive use. Verbose already displays all URLs.
             all_urls: false,
-            exclude_paths: self.exclude_paths(),
-            exclude_urls: self.exclude_urls(),
-            follow: self.follow(),
+            exclude_paths: match self.matches.values_of("exclude_paths") {
+                Some(values) => values.map(|s| s.to_string()).collect(),
+                None => vec![],
+            },
+            exclude_urls: match self.matches.values_of("exclude_urls") {
+                Some(values) => split_input(values),
+                None => vec![],
+            },
+            follow: self.matches.is_present("follow"),
             // Not for interactive use. Verbose already displays all files.
             list_files: false,
-            no_color: self.no_color(),
-            no_ignore: self.no_ignore(),
-            verbose: self.verbose(),
+            // Not for interactive use. Verbose already displays all URLs.
+            list_urls: false,
+            no_color: self.matches.is_present("no_color"),
+            no_ignore: self.matches.is_present("no_ignore"),
+            // Not for interactive use. Output can be sent to /dev/null if undesired.
+            silent: false,
+            verbose: self.matches.is_present("verbose"),
         }
     }
 }

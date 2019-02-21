@@ -17,11 +17,15 @@ pub struct Config {
     pub follow: bool,
     /// List all files visited, populating them into the `Info` struct.
     pub list_files: bool,
+    /// List all files visited, populating them into the `Info` struct.
+    pub list_urls: bool,
     /// Disable color output.
     pub no_color: bool,
     // TODO: test.
     /// Process files and directories that are ignored by default.
     pub no_ignore: bool,
+    /// Silence standard, non-`verbose` output.
+    pub silent: bool,
     /// Display more information, such as every file name and URL processed.
     pub verbose: bool,
 }
@@ -56,8 +60,18 @@ impl Config {
         self
     }
 
+    pub fn list_urls(mut self) -> Self {
+        self.list_urls = true;
+        self
+    }
+
     pub fn no_ignore(mut self) -> Self {
         self.no_ignore = true;
+        self
+    }
+
+    pub fn silent(mut self) -> Self {
+        self.silent = true;
         self
     }
 }

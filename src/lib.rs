@@ -1,15 +1,18 @@
 pub mod util;
 
 mod config;
+mod parse;
 
 pub use config::Config;
 
-use curl::easy::Easy;
+use curl::easy::{Easy2, Handler, WriteError};
 use ignore::overrides::OverrideBuilder;
 use ignore::WalkBuilder;
+use std::fs::File;
 use std::io;
-use std::io::Write;
-use termcolor::{Color, ColorSpec};
+use std::io::{BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
+use termcolor::{Color, ColorSpec, StandardStream};
 
 /// Object containing more information about the results of `check_paths`, such as number and names
 /// of files and URLs processed.
@@ -17,7 +20,10 @@ use termcolor::{Color, ColorSpec};
 pub struct Info {
     /// List of file names that were processed.
     /// Will only be set if `check_paths` was called with a `Config` with `list_files` set.
-    pub files_list: Option<Vec<String>>,
+    pub files_list: Option<Vec<PathBuf>>,
+    /// List of `FileUrl`s that were processed.
+    /// Will only be set if `check_paths` was called with a `Config` with `list_urls` set.
+    pub urls_list: Option<Vec<FileUrl>>,
     // TODO: implement and test.
     /// Total number of files processed.
     pub num_files: u64,
@@ -32,12 +38,10 @@ pub struct Info {
 /// URL in a File.
 /// If the URL could not be resolved, the `bad` field will be set.
 pub struct FileUrl {
-    pub url: String,
-    pub filepath: String,
     pub bad: bool,
-
+    pub filepath: PathBuf,
     pub line: usize,
-    pub col: usize,
+    pub url: String,
 }
 
 // FIXME: loch will check files more than once if they are passed in multiple times.
@@ -45,46 +49,45 @@ pub struct FileUrl {
 /// Returns a list of `FileUrl` objects containing the URL and where it was found.
 /// If any path is a directory, will get a list of files in the directory and process the list.
 /// Writes to stdout if `config.verbose` is set.
-pub fn check_paths(
-    input_paths: &[&str],
-    config: Option<&Config>,
-) -> Result<(Vec<FileUrl>, Info), io::Error> {
+pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info, io::Error> {
     if input_paths.is_empty() {
-        return Ok((Vec::new(), Default::default()));
+        return Ok(Default::default());
     }
 
     let empty = Vec::new();
 
     // Get configuration options.
     let exclude_urls = config.map_or(&empty, |config| &config.exclude_urls);
-    let mut files_list: Option<Vec<String>> = if config.map_or(false, |config| config.list_files) {
+    let mut files_list = if config.map_or(false, |config| config.list_files) {
+        Some(Vec::new())
+    } else {
+        None
+    };
+    let mut urls_list = if config.map_or(false, |config| config.list_urls) {
         Some(Vec::new())
     } else {
         None
     };
     let no_color = config.map_or(false, |config| config.no_color);
     let verbose = config.map_or(false, |config| config.verbose);
+    let silent = config.map_or(false, |config| config.silent);
 
     // Initialize variables.
     let mut stdout = util::init_color_stdout(no_color);
-    let mut urls = vec![];
+    let mut stderr = util::init_color_stderr(no_color);
     let mut num_files = 0;
     let mut num_urls = 0;
     let mut num_bad_urls = 0;
 
     // Define colors.
     let mut color1 = ColorSpec::new();
-    color1
-        .set_fg(Some(Color::Cyan))
-        .set_intense(false)
-        .set_bold(true);
+    color1.set_fg(Some(Color::Cyan)).set_bold(true);
     let mut color2 = ColorSpec::new();
-    color2.set_fg(Some(Color::Magenta)).set_intense(false);
+    color2.set_fg(Some(Color::Magenta));
     let mut color3 = ColorSpec::new();
-    color3
-        .set_fg(Some(Color::Cyan))
-        .set_intense(false)
-        .set_bold(true);
+    color3.set_fg(Some(Color::Cyan)).set_bold(true);
+    let mut color4 = ColorSpec::new();
+    color4.set_fg(Some(Color::Red));
 
     // Construct the file walker.
     let no_ignore = config.map_or(false, |config| config.no_ignore);
@@ -150,11 +153,17 @@ pub fn check_paths(
                 writeln!(stdout, " {}", path_str).unwrap();
             }
 
-            // TODO: Handle file.
-            // TODO: Track number of bad URLs.
+            let (file_urls, urls, bad_urls) =
+                check_file(path, verbose, silent, &mut stdout, &mut stderr)?;
+
+            if let Some(ref mut urls) = urls_list {
+                urls.extend(file_urls);
+            }
+            num_urls += urls;
+            num_bad_urls += bad_urls;
 
             if let Some(ref mut files) = files_list {
-                files.push(path_str.to_string());
+                files.push(path.to_owned());
             }
             num_files += 1;
         }
@@ -162,10 +171,115 @@ pub fn check_paths(
 
     let info = Info {
         files_list,
+        urls_list,
         num_files,
         num_urls,
         num_bad_urls,
     };
 
-    Ok((urls, info))
+    Ok(info)
+}
+
+// Checks a file's URLs and returns a list of URLs processed, the number of URLs processed, and the
+// number of bad URLs.
+fn check_file(
+    filepath: &Path,
+    verbose: bool,
+    silent: bool,
+    mut stdout: &mut StandardStream,
+    mut stderr: &mut StandardStream,
+) -> Result<(Vec<FileUrl>, u64, u64), io::Error> {
+    let mut file_urls = Vec::new();
+    let mut num_urls = 0;
+    let mut num_bad_urls = 0;
+    let mut line_num = 1;
+
+    // Define colors.
+
+    let mut color1 = ColorSpec::new();
+    color1.set_fg(Some(Color::Blue)).set_bold(true);
+    let mut color2 = ColorSpec::new();
+    color2.set_fg(Some(Color::Red)).set_bold(true);
+
+    // Get file contents.
+    let file = File::open(filepath)?;
+    let reader = BufReader::new(file);
+
+    for line in reader.lines() {
+        for url in parse::get_urls(&line?) {
+            if !url.is_empty() {
+                // Check URL.
+                if verbose {
+                    util::set_and_unset_color(&mut stdout, "Querying", &mut color1);
+
+                    writeln!(
+                        stdout,
+                        " {} ({}:{})",
+                        url,
+                        filepath.to_str().unwrap(),
+                        line_num
+                    )
+                    .unwrap();
+                }
+
+                let bad = check_url(url);
+
+                if bad {
+                    if !silent {
+                        util::set_and_unset_color(&mut stderr, "Bad url:", &mut color2);
+
+                        writeln!(
+                            stderr,
+                            " {} ({}:{})",
+                            url,
+                            filepath.to_str().unwrap(),
+                            line_num
+                        )
+                        .unwrap();
+                    }
+
+                    num_bad_urls += 1;
+                }
+
+                num_urls += 1;
+
+                file_urls.push(FileUrl {
+                    bad,
+                    filepath: filepath.to_owned(),
+                    line: line_num,
+                    url: url.to_string(),
+                });
+            }
+        }
+
+        line_num += 1;
+    }
+
+    Ok((file_urls, num_urls, num_bad_urls))
+}
+
+struct Collector(Vec<u8>);
+
+impl Handler for Collector {
+    fn write(&mut self, data: &[u8]) -> Result<usize, WriteError> {
+        self.0.extend_from_slice(data);
+        Ok(data.len())
+    }
+}
+
+// Return `true` if the URL is bad.
+// TODO: reuse the same handler between calls.
+fn check_url(url: &str) -> bool {
+    let mut handle = Easy2::new(Collector(Vec::new()));
+
+    handle.url(url).unwrap();
+    // handle.connect_only(true).unwrap();
+    match handle.perform() {
+        Ok(_) => (),
+        Err(_) => return true,
+    }
+
+    let code = handle.response_code().unwrap();
+    println!("{}", code);
+    code < 200 || code >= 400
 }

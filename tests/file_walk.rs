@@ -1,16 +1,20 @@
 extern crate loch;
 
 use loch::Config;
+use std::path::PathBuf;
 
 static TEST_DIR: &str = "tests/test_dir/";
 
 // Construct a vector of files relative from the test directory.
-fn files_vec(paths: &[&str]) -> Vec<String> {
-    paths.iter().map(|s| format!("{}{}", TEST_DIR, s)).collect()
+fn files_vec(paths: &[&str]) -> Vec<PathBuf> {
+    paths
+        .iter()
+        .map(|s| PathBuf::from(format!("{}{}", TEST_DIR, s)))
+        .collect()
 }
 
 // Return true if the lists contain the same elements.
-fn list_eq(vec1: &[String], vec2: &[String]) -> bool {
+fn list_eq(vec1: &[PathBuf], vec2: &[PathBuf]) -> bool {
     vec1.iter().all(|s| vec2.contains(s)) && vec2.iter().all(|s| vec1.contains(s))
 }
 
@@ -19,7 +23,7 @@ fn list_eq(vec1: &[String], vec2: &[String]) -> bool {
 fn all_files() {
     let config = Config::new().exclude_urls(&["*"]).list_files();
 
-    let (_, info) = loch::check_paths(&[TEST_DIR], Some(&config)).unwrap();
+    let info = loch::check_paths(&[TEST_DIR], Some(&config)).unwrap();
 
     let files_list = info.files_list.unwrap();
 
@@ -38,7 +42,7 @@ fn exclude_files() {
         .list_files()
         .exclude_paths(&["*.txt", "test.*", "test"]);
 
-    let (_, info) = loch::check_paths(&[TEST_DIR], Some(&config)).unwrap();
+    let info = loch::check_paths(&[TEST_DIR], Some(&config)).unwrap();
 
     let files_list = info.files_list.unwrap();
 
