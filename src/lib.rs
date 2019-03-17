@@ -1,3 +1,7 @@
+//! Loch library. Provides `check_paths` for other applications.
+
+#![deny(missing_docs)]
+
 pub mod util;
 
 mod config;
@@ -40,9 +44,13 @@ pub struct Info {
 /// If the URL could not be resolved, the `bad` field will be set.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FileUrl {
-    pub bad: bool,
+    /// If the URL was checked, the inner value will be true if the URL failed to resolve.
+    pub bad: Option<bool>,
+    /// The path to the file containing the URL.
     pub filepath: PathBuf,
+    /// The line the URL was found on.
     pub line: usize,
+    /// The URL.
     pub url: String,
 }
 
@@ -70,6 +78,7 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
     } else {
         None
     };
+    let no_check = config.map_or(false, |config| config.no_check);
     let no_color = config.map_or(false, |config| config.no_color);
     let strategy = if config.map_or(false, |config| config.no_http) {
         Strategy::NOHTTP
@@ -155,13 +164,20 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
 
         if file_type.is_file() {
             if verbose {
-                util::set_and_unset_color(&mut stdout, "Checking", &color3);
+                util::set_and_unset_color(&mut stdout, "Searching", &color3);
 
                 writeln!(stdout, " {}", path_str).unwrap();
             }
 
-            let (file_urls, urls, bad_urls) =
-                check_file(path, verbose, silent, strategy, &mut stdout, &mut stderr)?;
+            let (file_urls, urls, bad_urls) = check_file(
+                path,
+                verbose,
+                silent,
+                no_check,
+                strategy,
+                &mut stdout,
+                &mut stderr,
+            )?;
 
             if let Some(ref mut urls) = urls_list {
                 urls.extend(file_urls);
@@ -193,6 +209,7 @@ fn check_file(
     filepath: &Path,
     verbose: bool,
     silent: bool,
+    no_check: bool,
     strategy: Strategy,
     mut stdout: &mut StandardStream,
     mut stderr: &mut StandardStream,
@@ -218,7 +235,11 @@ fn check_file(
             if !url.is_empty() {
                 // Check URL.
                 if verbose {
-                    util::set_and_unset_color(&mut stdout, "Querying", &color1);
+                    util::set_and_unset_color(
+                        &mut stdout,
+                        if no_check { "Not checking" } else { "Checking" },
+                        &color1,
+                    );
 
                     writeln!(
                         stdout,
@@ -230,9 +251,9 @@ fn check_file(
                     .unwrap();
                 }
 
-                let bad = check_url(url);
+                let bad = if no_check { None } else { Some(check_url(url)) };
 
-                if bad {
+                if let Some(true) = bad {
                     if !silent {
                         util::set_and_unset_color(&mut stderr, "Bad url:", &color2);
 

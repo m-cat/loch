@@ -18,7 +18,7 @@ fn files_vec(paths: &[&str]) -> Vec<PathBuf> {
 // Test that all files are visited.
 #[test]
 fn all_files() {
-    let config = Config::new().exclude_urls(&["*"]).list_files().silent();
+    let config = Config::new().no_check().list_files().silent();
 
     let info = loch::check_paths(&[TEST_DIR], Some(&config)).unwrap();
 
@@ -35,7 +35,7 @@ fn all_files() {
 #[test]
 fn exclude_files() {
     let config = Config::new()
-        .exclude_urls(&["*"])
+        .no_check()
         .list_files()
         .exclude_paths(&["*.txt", "test.*", "test"])
         .silent();

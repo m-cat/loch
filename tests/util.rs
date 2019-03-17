@@ -10,6 +10,7 @@ where
     let mut list1 = list1.to_vec();
     let mut list2 = list2.to_vec();
 
+    // Sort the input for reliable diffs with pretty-assertions.
     list1.sort();
     list2.sort();
 

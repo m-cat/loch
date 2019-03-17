@@ -37,15 +37,17 @@ impl<'a> Cli<'a> {
                  Example: --exclude-urls sub.example.com '*.org' '*.test.com' example.com/page")
             (@arg follow: -L --follow
                 "Follow symbolic links")
+            (@arg no_check: --("no-check")
+                "Disable URL checking. URLs will still be listed")
             (@arg no_color: --("no-color")
                 "Disable color output. Equivalent to setting the NO_COLOR environment variable")
             (@arg no_http: --("no-http")
-                "URLs do not need to start with 'http:' or 'https:'. This may result in more false \
-                 positives")
+                "URLs do not need to start with 'http://' or 'https://'. This may result in more \
+                 false positives")
             (@arg no_ignore: --("no-ignore")
                 "Process files and directories that are usually ignored by default, such as hidden \
                  files and files in .gitignore and .ignore. \
-                 The --exclude-files option can be used in conjunction with --no-ignore, e.g. to \
+                 The --exclude-paths option can be used in conjunction with --no-ignore, e.g. to \
                  reapply filtering for hidden files and directories. \
                  Example: --no-ignore --exclude-paths .*")
 
@@ -85,6 +87,7 @@ impl<'a> Cli<'a> {
             list_files: false,
             // Not for interactive use. Verbose already displays all URLs.
             list_urls: false,
+            no_check: self.matches.is_present("no_check"),
             no_color: self.matches.is_present("no_color"),
             no_ignore: self.matches.is_present("no_ignore"),
             no_http: self.matches.is_present("no_http"),

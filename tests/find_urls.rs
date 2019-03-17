@@ -10,7 +10,7 @@ static TEST_DIR: &str = "tests/test_dir/";
 // Construct a FileUrl.
 fn fileurl(bad: bool, filepath: &str, line: usize, url: &str) -> FileUrl {
     FileUrl {
-        bad,
+        bad: Some(bad),
         filepath: PathBuf::from(format!("{}{}", TEST_DIR, filepath)),
         line,
         url: url.into(),

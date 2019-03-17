@@ -17,11 +17,13 @@ pub struct Config {
     pub follow: bool,
     /// List all files visited, populating them into the `Info` struct.
     pub list_files: bool,
-    /// List all files visited, populating them into the `Info` struct.
+    /// List all URLs visited, populating them into the `Info` struct.
     pub list_urls: bool,
+    /// Disable URL checking.
+    pub no_check: bool,
     /// Disable color output.
     pub no_color: bool,
-    /// URLs do not need to start with 'http:' or 'https:'.
+    /// URLs do not need to start with "http://" or "https://".
     pub no_http: bool,
     // TODO: test.
     /// Process files and directories that are ignored by default.
@@ -33,50 +35,60 @@ pub struct Config {
 }
 
 impl Config {
+    /// Create a new default `Config` object.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set all_urls=true.
     pub fn all_urls(mut self) -> Self {
         self.all_urls = true;
         self
     }
 
+    /// Set exclude_paths.
     pub fn exclude_paths(mut self, exclude_paths: &[&str]) -> Self {
         self.exclude_paths = exclude_paths.iter().map(|s| s.to_string()).collect();
         self
     }
 
+    /// Set exclude_urls.
     pub fn exclude_urls(mut self, exclude_urls: &[&str]) -> Self {
         self.exclude_urls = exclude_urls.iter().map(|s| s.to_string()).collect();
         self
     }
 
+    /// Set follow=true.
     pub fn follow(mut self) -> Self {
         self.follow = true;
         self
     }
 
+    /// Set list_files=true.
     pub fn list_files(mut self) -> Self {
         self.list_files = true;
         self
     }
 
+    /// Set list_urls=true.
     pub fn list_urls(mut self) -> Self {
         self.list_urls = true;
         self
     }
 
+    /// Set no_http=true.
     pub fn no_http(mut self) -> Self {
         self.no_http = true;
         self
     }
 
+    /// Set no_ignore=true.
     pub fn no_ignore(mut self) -> Self {
         self.no_ignore = true;
         self
     }
 
+    /// Set silent=true.
     pub fn silent(mut self) -> Self {
         self.silent = true;
         self
