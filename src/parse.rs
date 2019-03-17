@@ -10,8 +10,11 @@ pub enum Strategy {
 // Gets the first URL in `line` and returns the rest of the line and the URL.
 pub fn get_urls(line: &str, strategy: Strategy) -> Vec<&str> {
     lazy_static! {
-        static ref VALID_CHARS: &'static str = r"[^\s\[\]\(\)\{\}\|,]";
-        static ref BOUNDARY_CHARS: &'static str = r"[$[^\s\[\]\(\)\{\}\|,.:]]";
+        static ref FORBIDDEN: &'static str = r##" "<>\^`\{\|\}"##;
+        static ref VALID_CHARS: String =
+            r##"[^\s\[\]\(\),[FORBIDDEN]]"##.replace("[FORBIDDEN]", &FORBIDDEN);
+        static ref BOUNDARY_CHARS: String =
+            r##"[$[^\s\[\]\(\),.:[FORBIDDEN]]]"##.replace("[FORBIDDEN]", &FORBIDDEN);
         static ref REGEX_HTTP: Regex = Regex::new(
             &r"https?://[VALID]*[BOUNDARY]"
                 .replace("[VALID]", &VALID_CHARS)
@@ -54,7 +57,7 @@ mod tests {
             };
         }
 
-        test_parse!(" http://test", &["http://test"]);
+        test_parse!(" \"http://test\"", &["http://test"]);
 
         test_parse!("http://test/.., ", &["http://test/"]);
 
@@ -99,7 +102,7 @@ mod tests {
         );
 
         test_parse!(
-            "http://example.com/#, http://example.com#About",
+            "http://example.com/#, http://example.com#About\"",
             &["http://example.com/#", "http://example.com#About"],
         );
 
@@ -111,6 +114,16 @@ mod tests {
         test_parse!(
             "https://www.youtube.com/watch?time_continue=866&v=WGchhsKhG-A",
             &["https://www.youtube.com/watch?time_continue=866&v=WGchhsKhG-A"],
+        );
+
+        test_parse!(
+            "http://example.com/#`, http://example.com#About`",
+            &["http://example.com/#", "http://example.com#About"],
+        );
+
+        test_parse!(
+            "https://github.com/mola-T/flymd</a>.</p>",
+            &["https://github.com/mola-T/flymd"]
         );
     }
 
@@ -180,7 +193,7 @@ mod tests {
         );
 
         test_parse!(
-            "example.com/#, example.com/#About",
+            "example.com/#, example.com/#About\"",
             &["example.com/#", "example.com/#About"],
         );
 
@@ -192,6 +205,16 @@ mod tests {
         test_parse!(
             "www.youtube.com/watch?time_continue=866&v=WGchhsKhG-A",
             &["www.youtube.com/watch?time_continue=866&v=WGchhsKhG-A"],
+        );
+
+        test_parse!(
+            "example.com/#`, example.com/#About`",
+            &["example.com/#", "example.com/#About"],
+        );
+
+        test_parse!(
+            "https://github.com/mola-T/flymd</a>.</p>",
+            &["https://github.com/mola-T/flymd"]
         );
     }
 
