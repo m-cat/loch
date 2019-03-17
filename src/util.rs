@@ -12,31 +12,24 @@ pub fn env_no_color() -> bool {
     env::var(NO_COLOR).is_ok()
 }
 
-pub(crate) fn set_and_unset_color(stream: &mut StandardStream, s: &str, color: &mut ColorSpec) {
+pub(crate) fn init_color_stdout(no_color: bool) -> StandardStream {
+    if no_color || env_no_color() || atty::isnt(Stream::Stdout) {
+        return StandardStream::stdout(ColorChoice::Never);
+    }
+
+    StandardStream::stdout(ColorChoice::Auto)
+}
+
+pub(crate) fn init_color_stderr(no_color: bool) -> StandardStream {
+    if no_color || env_no_color() || atty::isnt(Stream::Stderr) {
+        return StandardStream::stderr(ColorChoice::Never);
+    }
+
+    StandardStream::stderr(ColorChoice::Auto)
+}
+
+pub(crate) fn set_and_unset_color(stream: &mut StandardStream, s: &str, color: &ColorSpec) {
     stream.set_color(color).unwrap();
     write!(stream, "{}", s).unwrap();
     stream.reset().unwrap();
-}
-
-pub(crate) fn init_color_stdout(no_color: bool) -> StandardStream {
-    let auto = StandardStream::stdout(ColorChoice::Auto);
-    let never = StandardStream::stdout(ColorChoice::Never);
-
-    if no_color || env_no_color() || atty::isnt(Stream::Stdout) {
-        return never;
-    }
-
-    auto
-}
-
-#[allow(dead_code)]
-pub(crate) fn init_color_stderr(no_color: bool) -> StandardStream {
-    let auto = StandardStream::stderr(ColorChoice::Auto);
-    let never = StandardStream::stderr(ColorChoice::Never);
-
-    if no_color || env_no_color() || atty::isnt(Stream::Stderr) {
-        return never;
-    }
-
-    auto
 }

@@ -1,4 +1,4 @@
-//! # Loch: Link-out check. Pronounced "loch".
+//! Loch: Link-out check. Pronounced "loch".
 
 mod cli;
 mod util;
@@ -44,10 +44,11 @@ fn main() {
             if info.num_bad_urls > 0 {
                 stderr.set_color(&color2).unwrap();
                 writeln!(&mut stderr, "({}) bad URLs found!", info.num_bad_urls).unwrap();
+                stderr.reset().unwrap();
 
                 process::exit(1);
             } else {
-                util::set_and_unset_color(&mut stdout, "No bad URLs found.", &mut color1);
+                util::set_and_unset_color(&mut stdout, "No bad URLs found.", &color1);
                 writeln!(&mut stdout).unwrap();
 
                 if verbose {
@@ -63,7 +64,9 @@ fn main() {
         Err(error) => {
             // If an error occurred, display it to stderr and return code 1.
 
-            eprintln!("Error: {}", error);
+            util::set_and_unset_color(&mut stderr, "error:", &color2);
+            writeln!(&mut stderr, " {}", error).unwrap();
+            stderr.reset().unwrap();
 
             process::exit(1);
         }

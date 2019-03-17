@@ -1,5 +1,7 @@
 extern crate loch;
 
+mod util;
+
 use loch::Config;
 use std::path::PathBuf;
 
@@ -13,24 +15,19 @@ fn files_vec(paths: &[&str]) -> Vec<PathBuf> {
         .collect()
 }
 
-// Return true if the lists contain the same elements.
-fn list_eq(vec1: &[PathBuf], vec2: &[PathBuf]) -> bool {
-    vec1.iter().all(|s| vec2.contains(s)) && vec2.iter().all(|s| vec1.contains(s))
-}
-
 // Test that all files are visited.
 #[test]
 fn all_files() {
-    let config = Config::new().exclude_urls(&["*"]).list_files();
+    let config = Config::new().exclude_urls(&["*"]).list_files().silent();
 
     let info = loch::check_paths(&[TEST_DIR], Some(&config)).unwrap();
 
     let files_list = info.files_list.unwrap();
 
-    assert!(list_eq(
+    util::assert_list_eq(
         &files_list,
-        &files_vec(&["example", "example.txt", "test", "test.rs", "test.txt"])
-    ));
+        &files_vec(&["example", "example.txt", "test", "test.rs", "test.txt"]),
+    );
     assert_eq!(files_list.len() as u64, info.num_files);
 }
 
@@ -40,12 +37,13 @@ fn exclude_files() {
     let config = Config::new()
         .exclude_urls(&["*"])
         .list_files()
-        .exclude_paths(&["*.txt", "test.*", "test"]);
+        .exclude_paths(&["*.txt", "test.*", "test"])
+        .silent();
 
     let info = loch::check_paths(&[TEST_DIR], Some(&config)).unwrap();
 
     let files_list = info.files_list.unwrap();
 
-    assert!(list_eq(&files_list, &files_vec(&["example"])));
+    util::assert_list_eq(&files_list, &files_vec(&["example"]));
     assert_eq!(files_list.len() as u64, info.num_files);
 }

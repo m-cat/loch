@@ -8,6 +8,7 @@ pub use config::Config;
 use curl::easy::{Easy2, Handler, WriteError};
 use ignore::overrides::OverrideBuilder;
 use ignore::WalkBuilder;
+use parse::Strategy;
 use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader, Write};
@@ -16,7 +17,7 @@ use termcolor::{Color, ColorSpec, StandardStream};
 
 /// Object containing more information about the results of `check_paths`, such as number and names
 /// of files and URLs processed.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Info {
     /// List of file names that were processed.
     /// Will only be set if `check_paths` was called with a `Config` with `list_files` set.
@@ -37,6 +38,7 @@ pub struct Info {
 
 /// URL in a File.
 /// If the URL could not be resolved, the `bad` field will be set.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FileUrl {
     pub bad: bool,
     pub filepath: PathBuf,
@@ -69,6 +71,11 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
         None
     };
     let no_color = config.map_or(false, |config| config.no_color);
+    let strategy = if config.map_or(false, |config| config.no_http) {
+        Strategy::NOHTTP
+    } else {
+        Strategy::HTTP
+    };
     let verbose = config.map_or(false, |config| config.verbose);
     let silent = config.map_or(false, |config| config.silent);
 
@@ -116,24 +123,24 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
 
     // Print out config values.
     if verbose {
-        util::set_and_unset_color(&mut stdout, "Input paths:", &mut color1);
+        util::set_and_unset_color(&mut stdout, "Input paths:", &color1);
         writeln!(stdout, " {:?}", input_paths).unwrap();
-        util::set_and_unset_color(&mut stdout, "Parameters:", &mut color1);
+        util::set_and_unset_color(&mut stdout, "Parameters:", &color1);
         writeln!(stdout).unwrap();
 
         // TODO: Add all parameters here.
-        util::set_and_unset_color(&mut stdout, "  exclude-paths:", &mut color2);
+        util::set_and_unset_color(&mut stdout, "  exclude-paths:", &color2);
         writeln!(stdout, " {:?}", exclude_paths).unwrap();
-        util::set_and_unset_color(&mut stdout, "  exclude-urls:", &mut color2);
+        util::set_and_unset_color(&mut stdout, "  exclude-urls:", &color2);
         writeln!(stdout, " {:?}", exclude_urls).unwrap();
-        util::set_and_unset_color(&mut stdout, "  follow:", &mut color2);
+        util::set_and_unset_color(&mut stdout, "  follow:", &color2);
         writeln!(stdout, " {}", follow).unwrap();
-        util::set_and_unset_color(&mut stdout, "  no-color:", &mut color2);
+        util::set_and_unset_color(&mut stdout, "  no-color:", &color2);
         let no_color = config.map_or(false, |config| config.no_color);
         writeln!(stdout, " {}", no_color).unwrap();
-        util::set_and_unset_color(&mut stdout, "  no-ignore:", &mut color2);
+        util::set_and_unset_color(&mut stdout, "  no-ignore:", &color2);
         writeln!(stdout, " {}", no_ignore).unwrap();
-        util::set_and_unset_color(&mut stdout, "  verbose:", &mut color2);
+        util::set_and_unset_color(&mut stdout, "  verbose:", &color2);
         writeln!(stdout, " {}", verbose).unwrap();
     }
 
@@ -148,13 +155,13 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
 
         if file_type.is_file() {
             if verbose {
-                util::set_and_unset_color(&mut stdout, "Checking", &mut color3);
+                util::set_and_unset_color(&mut stdout, "Checking", &color3);
 
                 writeln!(stdout, " {}", path_str).unwrap();
             }
 
             let (file_urls, urls, bad_urls) =
-                check_file(path, verbose, silent, &mut stdout, &mut stderr)?;
+                check_file(path, verbose, silent, strategy, &mut stdout, &mut stderr)?;
 
             if let Some(ref mut urls) = urls_list {
                 urls.extend(file_urls);
@@ -186,6 +193,7 @@ fn check_file(
     filepath: &Path,
     verbose: bool,
     silent: bool,
+    strategy: Strategy,
     mut stdout: &mut StandardStream,
     mut stderr: &mut StandardStream,
 ) -> Result<(Vec<FileUrl>, u64, u64), io::Error> {
@@ -206,11 +214,11 @@ fn check_file(
     let reader = BufReader::new(file);
 
     for line in reader.lines() {
-        for url in parse::get_urls(&line?) {
+        for url in parse::get_urls(&line?, strategy) {
             if !url.is_empty() {
                 // Check URL.
                 if verbose {
-                    util::set_and_unset_color(&mut stdout, "Querying", &mut color1);
+                    util::set_and_unset_color(&mut stdout, "Querying", &color1);
 
                     writeln!(
                         stdout,
@@ -226,7 +234,7 @@ fn check_file(
 
                 if bad {
                     if !silent {
-                        util::set_and_unset_color(&mut stderr, "Bad url:", &mut color2);
+                        util::set_and_unset_color(&mut stderr, "Bad url:", &color2);
 
                         writeln!(
                             stderr,
@@ -280,6 +288,5 @@ fn check_url(url: &str) -> bool {
     }
 
     let code = handle.response_code().unwrap();
-    println!("{}", code);
     code < 200 || code >= 400
 }

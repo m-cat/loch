@@ -39,6 +39,9 @@ impl<'a> Cli<'a> {
                 "Follow symbolic links")
             (@arg no_color: --("no-color")
                 "Disable color output. Equivalent to setting the NO_COLOR environment variable")
+            (@arg no_http: --("no-http")
+                "URLs do not need to start with 'http:' or 'https:'. This may result in more false \
+                 positives")
             (@arg no_ignore: --("no-ignore")
                 "Process files and directories that are usually ignored by default, such as hidden \
                  files and files in .gitignore and .ignore. \
@@ -84,6 +87,7 @@ impl<'a> Cli<'a> {
             list_urls: false,
             no_color: self.matches.is_present("no_color"),
             no_ignore: self.matches.is_present("no_ignore"),
+            no_http: self.matches.is_present("no_http"),
             // Not for interactive use. Output can be sent to /dev/null if undesired.
             silent: false,
             verbose: self.matches.is_present("verbose"),

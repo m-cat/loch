@@ -21,6 +21,8 @@ pub struct Config {
     pub list_urls: bool,
     /// Disable color output.
     pub no_color: bool,
+    /// URLs do not need to start with 'http:' or 'https:'.
+    pub no_http: bool,
     // TODO: test.
     /// Process files and directories that are ignored by default.
     pub no_ignore: bool,
@@ -62,6 +64,11 @@ impl Config {
 
     pub fn list_urls(mut self) -> Self {
         self.list_urls = true;
+        self
+    }
+
+    pub fn no_http(mut self) -> Self {
+        self.no_http = true;
         self
     }
 
