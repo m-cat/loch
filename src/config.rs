@@ -76,6 +76,18 @@ impl Config {
         self
     }
 
+    /// Set no_check=true.
+    pub fn no_check(mut self) -> Self {
+        self.no_check = true;
+        self
+    }
+
+    /// Set no_color=true.
+    pub fn no_color(mut self) -> Self {
+        self.no_color = true;
+        self
+    }
+
     /// Set no_http=true.
     pub fn no_http(mut self) -> Self {
         self.no_http = true;
@@ -91,6 +103,12 @@ impl Config {
     /// Set silent=true.
     pub fn silent(mut self) -> Self {
         self.silent = true;
+        self
+    }
+
+    /// Set verbose=true.
+    pub fn verbose(mut self) -> Self {
+        self.verbose = true;
         self
     }
 }

@@ -5,16 +5,18 @@
 pub mod util;
 
 mod config;
+mod error;
 mod parse;
+mod url;
 
 pub use config::Config;
 
+use crate::error::{LochError, LochResult};
+use crate::url::ExclusionPattern;
 use curl::easy::{Easy2, Handler, WriteError};
 use ignore::overrides::OverrideBuilder;
 use ignore::WalkBuilder;
-use parse::Strategy;
 use std::fs::File;
-use std::io;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use termcolor::{Color, ColorSpec, StandardStream};
@@ -46,6 +48,8 @@ pub struct Info {
 pub struct FileUrl {
     /// If the URL was checked, the inner value will be true if the URL failed to resolve.
     pub bad: Option<bool>,
+    /// Whether this URL was excluded via --exclude-urls.
+    pub excluded: bool,
     /// The path to the file containing the URL.
     pub filepath: PathBuf,
     /// The line the URL was found on.
@@ -59,41 +63,53 @@ pub struct FileUrl {
 /// Returns a list of `FileUrl` objects containing the URL and where it was found.
 /// If any path is a directory, will get a list of files in the directory and process the list.
 /// Writes to stdout if `config.verbose` is set.
-pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info, io::Error> {
+pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> LochResult<Info> {
     if input_paths.is_empty() {
         return Ok(Default::default());
     }
 
-    let empty = Vec::new();
+    let empty = vec![];
 
-    // Get configuration options.
-    let exclude_urls = config.map_or(&empty, |config| &config.exclude_urls);
-    let mut files_list = if config.map_or(false, |config| config.list_files) {
-        Some(Vec::new())
-    } else {
-        None
-    };
-    let mut urls_list = if config.map_or(false, |config| config.list_urls) {
-        Some(Vec::new())
-    } else {
-        None
-    };
+    // Get config options.
+
+    // Get excluded URLs.
+    let exclude_urls: Vec<ExclusionPattern> = config.map_or(Ok(vec![]), |config| {
+        config
+            .exclude_urls
+            .iter()
+            .map(|url_pattern| {
+                if let Some((prefix, domains, path)) = url::split_pattern(url_pattern) {
+                    Ok(ExclusionPattern {
+                        prefix,
+                        domains,
+                        path,
+                    })
+                } else {
+                    Err(LochError::InvalidPattern(url_pattern.clone()))
+                }
+            })
+            .collect()
+    })?;
+
+    // Get excluded paths.
+    let exclude_paths = config.map_or(&empty, |config| &config.exclude_paths);
+
+    // Get flags.
+    let follow = config.map_or(false, |config| config.follow);
+    let list_files = config.map_or(false, |config| config.list_files);
+    let list_urls = config.map_or(false, |config| config.list_urls);
     let no_check = config.map_or(false, |config| config.no_check);
     let no_color = config.map_or(false, |config| config.no_color);
-    let strategy = if config.map_or(false, |config| config.no_http) {
-        Strategy::NOHTTP
-    } else {
-        Strategy::HTTP
-    };
-    let verbose = config.map_or(false, |config| config.verbose);
+    let no_http = config.map_or(false, |config| config.no_http);
+    let no_ignore = config.map_or(false, |config| config.no_ignore);
     let silent = config.map_or(false, |config| config.silent);
+    let verbose = config.map_or(false, |config| config.verbose);
 
-    // Initialize variables.
+    // Initialize printing.
+
+    // Define standard output streams.
     let mut stdout = util::init_color_stdout(no_color);
     let mut stderr = util::init_color_stderr(no_color);
-    let mut num_files = 0;
-    let mut num_urls = 0;
-    let mut num_bad_urls = 0;
 
     // Define colors.
     let mut color1 = ColorSpec::new();
@@ -105,9 +121,45 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
     let mut color4 = ColorSpec::new();
     color4.set_fg(Some(Color::Red));
 
+    // Print out input values.
+    if verbose {
+        util::set_and_unset_color(&mut stdout, "Input paths:", &color1)?;
+        writeln!(stdout, " {:?}", input_paths)?;
+        util::set_and_unset_color(&mut stdout, "Parameters:", &color1)?;
+        writeln!(stdout)?;
+
+        // Display CLI arguments only (API-only arguments can be accessed programmatically).
+        // TODO: Add all parameters here.
+        util::set_and_unset_color(&mut stdout, "  exclude-paths:", &color2)?;
+        writeln!(stdout, " {:?}", exclude_paths)?;
+        util::set_and_unset_color(&mut stdout, "  exclude-urls:", &color2)?;
+        writeln!(stdout, " {:?}", exclude_urls)?;
+        util::set_and_unset_color(&mut stdout, "  follow:", &color2)?;
+        writeln!(stdout, " {}", follow)?;
+        util::set_and_unset_color(&mut stdout, "  no-check", &color2)?;
+        writeln!(stdout, " {}", no_check)?;
+        util::set_and_unset_color(&mut stdout, "  no-color:", &color2)?;
+        writeln!(stdout, " {}", no_color)?;
+        util::set_and_unset_color(&mut stdout, "  no-http:", &color2)?;
+        writeln!(stdout, " {}", no_http)?;
+        util::set_and_unset_color(&mut stdout, "  no-ignore:", &color2)?;
+        writeln!(stdout, " {}", no_ignore)?;
+        util::set_and_unset_color(&mut stdout, "  verbose:", &color2)?;
+        writeln!(stdout, " {}", verbose)?;
+    }
+
+    // Initialize logic.
+
+    // Initialize lists.
+    let mut files_list = if list_files { Some(Vec::new()) } else { None };
+    let mut urls_list = if list_urls { Some(Vec::new()) } else { None };
+
+    // Initialize variables.
+    let mut num_files = 0;
+    let mut num_urls = 0;
+    let mut num_bad_urls = 0;
+
     // Construct the file walker.
-    let no_ignore = config.map_or(false, |config| config.no_ignore);
-    let follow = config.map_or(false, |config| config.follow);
     let mut walk_builder = WalkBuilder::new(input_paths[0]);
     walk_builder
         .standard_filters(!no_ignore)
@@ -117,56 +169,35 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
         walk_builder.add(path);
     }
 
-    // Add overrides.
-    let exclude_paths = config.map_or(&empty, |config| &config.exclude_paths);
-
+    // Add path overrides.
     if !exclude_paths.is_empty() {
         let mut overrides = OverrideBuilder::new(".");
 
         for file in exclude_paths {
-            overrides.add(&format!("!{}", file)).unwrap();
+            overrides.add(&format!("!{}", file))?;
         }
 
-        walk_builder.overrides(overrides.build().expect("Excludes provided were invalid"));
-    }
-
-    // Print out config values.
-    if verbose {
-        util::set_and_unset_color(&mut stdout, "Input paths:", &color1);
-        writeln!(stdout, " {:?}", input_paths).unwrap();
-        util::set_and_unset_color(&mut stdout, "Parameters:", &color1);
-        writeln!(stdout).unwrap();
-
-        // TODO: Add all parameters here.
-        util::set_and_unset_color(&mut stdout, "  exclude-paths:", &color2);
-        writeln!(stdout, " {:?}", exclude_paths).unwrap();
-        util::set_and_unset_color(&mut stdout, "  exclude-urls:", &color2);
-        writeln!(stdout, " {:?}", exclude_urls).unwrap();
-        util::set_and_unset_color(&mut stdout, "  follow:", &color2);
-        writeln!(stdout, " {}", follow).unwrap();
-        util::set_and_unset_color(&mut stdout, "  no-color:", &color2);
-        let no_color = config.map_or(false, |config| config.no_color);
-        writeln!(stdout, " {}", no_color).unwrap();
-        util::set_and_unset_color(&mut stdout, "  no-ignore:", &color2);
-        writeln!(stdout, " {}", no_ignore).unwrap();
-        util::set_and_unset_color(&mut stdout, "  verbose:", &color2);
-        writeln!(stdout, " {}", verbose).unwrap();
+        walk_builder.overrides(overrides.build()?);
     }
 
     // TODO: Use build_parallel instead.
     let walker = walk_builder.build();
 
+    // Walk through the directory tree.
+
     for entry in walker {
-        let entry = entry.unwrap();
+        let entry = entry?;
         let path = entry.path();
+
+        // These unwraps shouldn't fail.
         let path_str = path.to_str().unwrap();
         let file_type = entry.file_type().unwrap();
 
         if file_type.is_file() {
             if verbose {
-                util::set_and_unset_color(&mut stdout, "Searching", &color3);
+                util::set_and_unset_color(&mut stdout, "Searching", &color3)?;
 
-                writeln!(stdout, " {}", path_str).unwrap();
+                writeln!(stdout, " {}", path_str)?;
             }
 
             let (file_urls, urls, bad_urls) = check_file(
@@ -174,7 +205,8 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
                 verbose,
                 silent,
                 no_check,
-                strategy,
+                no_http,
+                &exclude_urls,
                 &mut stdout,
                 &mut stderr,
             )?;
@@ -210,10 +242,11 @@ fn check_file(
     verbose: bool,
     silent: bool,
     no_check: bool,
-    strategy: Strategy,
+    no_http: bool,
+    exclude_urls: &[ExclusionPattern],
     mut stdout: &mut StandardStream,
     mut stderr: &mut StandardStream,
-) -> Result<(Vec<FileUrl>, u64, u64), io::Error> {
+) -> LochResult<(Vec<FileUrl>, u64, u64)> {
     let mut file_urls = Vec::new();
     let mut num_urls = 0;
     let mut num_bad_urls = 0;
@@ -231,15 +264,23 @@ fn check_file(
     let reader = BufReader::new(file);
 
     for line in reader.lines() {
-        for url in parse::get_urls(&line?, strategy) {
+        for url in parse::get_urls(&line?, no_http) {
             if !url.is_empty() {
+                let excluded = url::is_url_excluded(url, exclude_urls);
+
                 // Check URL.
                 if verbose {
                     util::set_and_unset_color(
                         &mut stdout,
-                        if no_check { "Not checking" } else { "Checking" },
+                        if no_check {
+                            "Not checking"
+                        } else if excluded {
+                            "Skipping"
+                        } else {
+                            "Checking"
+                        },
                         &color1,
-                    );
+                    )?;
 
                     writeln!(
                         stdout,
@@ -247,15 +288,18 @@ fn check_file(
                         url,
                         filepath.to_str().unwrap(),
                         line_num
-                    )
-                    .unwrap();
+                    )?;
                 }
 
-                let bad = if no_check { None } else { Some(check_url(url)) };
+                let bad = if no_check || excluded {
+                    None
+                } else {
+                    Some(check_url(url)?)
+                };
 
                 if let Some(true) = bad {
                     if !silent {
-                        util::set_and_unset_color(&mut stderr, "Bad url:", &color2);
+                        util::set_and_unset_color(&mut stderr, "Bad url:", &color2)?;
 
                         writeln!(
                             stderr,
@@ -263,8 +307,7 @@ fn check_file(
                             url,
                             filepath.to_str().unwrap(),
                             line_num
-                        )
-                        .unwrap();
+                        )?;
                     }
 
                     num_bad_urls += 1;
@@ -274,6 +317,7 @@ fn check_file(
 
                 file_urls.push(FileUrl {
                     bad,
+                    excluded,
                     filepath: filepath.to_owned(),
                     line: line_num,
                     url: url.to_string(),
@@ -298,16 +342,16 @@ impl Handler for Collector {
 
 // Return `true` if the URL is bad.
 // TODO: reuse the same handler between calls.
-fn check_url(url: &str) -> bool {
+fn check_url(url: &str) -> LochResult<bool> {
     let mut handle = Easy2::new(Collector(Vec::new()));
 
-    handle.url(url).unwrap();
-    // handle.connect_only(true).unwrap();
+    handle.url(url)?;
+    // handle.connect_only(true)?;
     match handle.perform() {
         Ok(_) => (),
-        Err(_) => return true,
+        Err(_) => return Ok(true),
     }
 
-    let code = handle.response_code().unwrap();
-    code < 200 || code >= 400
+    let code = handle.response_code()?;
+    Ok(code < 200 || code >= 400)
 }

@@ -1,15 +1,17 @@
 //! Loch: Link-out check. Pronounced "loch".
 
 mod cli;
+mod error;
 mod util;
 
 use crate::cli::Cli;
+use crate::error::LochResult;
 use loch;
 use std::io::Write;
 use std::process;
 use termcolor::{Color, ColorSpec, WriteColor};
 
-fn main() {
+fn main() -> LochResult<()> {
     let cli = Cli::from_args();
     let input_paths = cli.input();
     let config = cli.to_config();
@@ -23,8 +25,7 @@ fn main() {
         writeln!(
             &mut stdout,
             "NO_COLOR environment variable set, color output disabled."
-        )
-        .unwrap();
+        )?;
     }
 
     // Define colors.
@@ -42,31 +43,32 @@ fn main() {
     match loch::check_paths(&input_paths, Some(&config)) {
         Ok(info) => {
             if info.num_bad_urls > 0 {
-                stderr.set_color(&color2).unwrap();
-                writeln!(&mut stderr, "({}) bad URLs found!", info.num_bad_urls).unwrap();
-                stderr.reset().unwrap();
+                stderr.set_color(&color2)?;
+                writeln!(&mut stderr, "({}) bad URLs found!", info.num_bad_urls)?;
+                stderr.reset()?;
 
                 process::exit(1);
             } else {
-                util::set_and_unset_color(&mut stdout, "No bad URLs found.", &color1);
-                writeln!(&mut stdout).unwrap();
+                util::set_and_unset_color(&mut stdout, "No bad URLs found.", &color1)?;
+                writeln!(&mut stdout)?;
 
                 if verbose {
                     writeln!(
                         &mut stdout,
                         "{} files and {} URLs were processed.",
                         info.num_files, info.num_urls
-                    )
-                    .unwrap();
+                    )?;
                 }
+
+                Ok(())
             }
         }
         Err(error) => {
             // If an error occurred, display it to stderr and return code 1.
 
-            util::set_and_unset_color(&mut stderr, "error:", &color2);
-            writeln!(&mut stderr, " {}", error).unwrap();
-            stderr.reset().unwrap();
+            util::set_and_unset_color(&mut stderr, "error:", &color2)?;
+            writeln!(&mut stderr, " {}", error)?;
+            stderr.reset()?;
 
             process::exit(1);
         }

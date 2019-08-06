@@ -1,41 +1,44 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
-#[derive(Clone, Copy)]
-pub enum Strategy {
-    HTTP,
-    NOHTTP,
-}
-
 // Gets the first URL in `line` and returns the rest of the line and the URL.
-pub fn get_urls(line: &str, strategy: Strategy) -> Vec<&str> {
+pub fn get_urls(line: &str, no_http: bool) -> Vec<&str> {
     lazy_static! {
         static ref FORBIDDEN: &'static str = r##" "<>\^`\{\|\}"##;
+        static ref INVALID: String = { let mut invalid = FORBIDDEN.to_string();
+                                       invalid.push_str(r##"\s\[\]\(\),"##);
+                                       invalid };
         static ref VALID_CHARS: String =
-            r##"[^\s\[\]\(\),[FORBIDDEN]]"##.replace("[FORBIDDEN]", &FORBIDDEN);
+            r##"[^[INVALID]]"##.replace("[INVALID]", &INVALID);
         static ref BOUNDARY_CHARS: String =
-            r##"[$[^\s\[\]\(\),.:[FORBIDDEN]]]"##.replace("[FORBIDDEN]", &FORBIDDEN);
+            r##"[$[^[INVALID].:]]"##.replace("[INVALID]", &INVALID);
+        static ref START_BOUNDARY_CHARS: String =
+            r##"[$[^[INVALID].:/]]"##.replace("[INVALID]", &INVALID);
+        // Require at least two valid characters and a boundary character.
+        // This makes the optional double slash at the beginning work as expected.
         static ref REGEX_HTTP: Regex = Regex::new(
-            &r"https?://[VALID]*[BOUNDARY]"
+            &r"https?:/?/?[VALID]+[VALID]+[BOUNDARY]"
                 .replace("[VALID]", &VALID_CHARS)
                 .replace("[BOUNDARY]", &BOUNDARY_CHARS)
         )
         .unwrap();
         static ref REGEX_NOHTTP: Regex = Regex::new(
-            &r"[BOUNDARY][VALID]*(\.[VALID]+)+(/[VALID]*)*[BOUNDARY]"
+            &r"[START_BOUNDARY][VALID]*(\.[VALID]+)+(/[VALID]*)*[BOUNDARY]"
                 .replace("[VALID]", &VALID_CHARS)
                 .replace("[BOUNDARY]", &BOUNDARY_CHARS)
+                .replace("[START_BOUNDARY]", &START_BOUNDARY_CHARS)
         )
         .unwrap();
     }
 
-    match strategy {
-        Strategy::HTTP => REGEX_HTTP.find_iter(line).map(|mat| mat.as_str()).collect(),
-        Strategy::NOHTTP => REGEX_NOHTTP
+    if no_http {
+        REGEX_NOHTTP
             .find_iter(line)
             .map(|mat| mat.as_str())
             .filter(|s| s.contains('/'))
-            .collect(),
+            .collect()
+    } else {
+        REGEX_HTTP.find_iter(line).map(|mat| mat.as_str()).collect()
     }
 }
 
@@ -47,7 +50,7 @@ mod tests {
     fn parse_urls_http() {
         macro_rules! test_parse {
             ($s:expr, $res:expr $(,)?) => {
-                let mut urls = get_urls($s, Strategy::HTTP);
+                let mut urls = get_urls($s, false);
                 urls.sort();
                 urls.dedup();
                 assert!(
@@ -57,13 +60,13 @@ mod tests {
             };
         }
 
-        test_parse!(" \"http://test\"", &["http://test"]);
+        test_parse!(" \"http:test\"", &["http:test"]);
 
         test_parse!("http://test/.., ", &["http://test/"]);
 
         test_parse!(
-            "http://. http://test. https://example.com-",
-            &["http://test", "https://example.com-"],
+            "http://. http:/test. https://example.com-",
+            &["http:/test", "https://example.com-"],
         );
 
         test_parse!("https://www.google.com/", &["https://www.google.com/"]);
@@ -93,11 +96,11 @@ mod tests {
         );
 
         test_parse!(
-            "http://www.example.com/page/index.html,www.test.com,https://example.com//, \
+            "http://www.example.com/~page~/index.html,www.test.com,https://example.com//, \
              ,example.com/page, ,www.example.com",
             &[
                 "https://example.com//",
-                "http://www.example.com/page/index.html"
+                "http://www.example.com/~page~/index.html"
             ],
         );
 
@@ -131,7 +134,7 @@ mod tests {
     fn parse_urls_nohttp() {
         macro_rules! test_parse {
             ($s:expr, $res:expr $(,)?) => {
-                let mut urls = get_urls($s, Strategy::NOHTTP);
+                let mut urls = get_urls($s, true);
                 urls.sort();
                 urls.dedup();
                 assert!(
@@ -159,8 +162,8 @@ mod tests {
         test_parse!("https://www.google.com/", &["https://www.google.com/"]);
 
         test_parse!(
-            "goog.com/page, www.google.com/.",
-            &["goog.com/page", "www.google.com/"],
+            "goog.com/~page~, www.google.com/.",
+            &["goog.com/~page~", "www.google.com/"],
         );
 
         test_parse!("[https://www.test.com]", &["https://www.test.com"]);
@@ -215,6 +218,11 @@ mod tests {
         test_parse!(
             "https://github.com/mola-T/flymd</a>.</p>",
             &["https://github.com/mola-T/flymd"]
+        );
+
+        test_parse!(
+            "//test.com/ ftp://test.com/page ://test.com/",
+            &["test.com/", "fpt://test.com/page"]
         );
     }
 

@@ -50,11 +50,11 @@ impl<'a> Cli<'a> {
                  The --exclude-paths option can be used in conjunction with --no-ignore, e.g. to \
                  reapply filtering for hidden files and directories. \
                  Example: --no-ignore --exclude-paths .*")
+            (@arg verbose: -v --verbose
+                "Wordy, prolix, long-winded")
 
             (@arg input: ...
                 "The input files and/or directories to be checked")
-            (@arg verbose: -v --verbose
-                "Wordy, prolix, long-winded")
         )
         .get_matches();
 

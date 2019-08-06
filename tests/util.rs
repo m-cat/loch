@@ -1,4 +1,3 @@
-#[cfg(test)]
 use pretty_assertions::assert_eq;
 use std::fmt::Debug;
 
