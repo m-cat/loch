@@ -6,6 +6,7 @@
 [![Documentation](https://docs.rs/loch/badge.svg)](https://docs.rs/loch)
 [![Issues](https://img.shields.io/github/issues-raw/m-cat/loch.svg)](https://github.com/m-cat/loch/issues)
 [![LoC](https://tokei.rs/b1/github/m-cat/loch)](https://github.com/m-cat/loch)
+[![Coverage Status](https://coveralls.io/repos/github/m-cat/loch/badge.svg?branch=master)](https://coveralls.io/github/m-cat/loch?branch=master)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## About
