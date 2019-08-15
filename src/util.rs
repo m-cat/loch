@@ -2,8 +2,7 @@
 
 use crate::error::LochResult;
 use atty::{self, Stream};
-use std::env;
-use std::io::Write;
+use std::{env, io::Write};
 use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 static NO_COLOR: &str = "NO_COLOR";

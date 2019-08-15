@@ -185,8 +185,8 @@ mod tests {
         );
 
         test_parse!(
-            "www.example.com/page/index.html,www.test.com,https://example.com, \
-             ,example.com/page, ,www.example.com/",
+            "www.example.com/page/index.html,www.test.com,https://example.com, ,example.com/page, \
+             ,www.example.com/",
             &[
                 "example.com/page",
                 "https://example.com",

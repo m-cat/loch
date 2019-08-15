@@ -11,14 +11,17 @@ mod url;
 
 pub use config::Config;
 
-use crate::error::{LochError, LochResult};
-use crate::url::ExclusionPattern;
+use crate::{
+    error::{LochError, LochResult},
+    url::ExclusionPattern,
+};
 use curl::easy::{Easy2, Handler, WriteError};
-use ignore::overrides::OverrideBuilder;
-use ignore::WalkBuilder;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
+use ignore::{overrides::OverrideBuilder, WalkBuilder};
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, Write},
+    path::{Path, PathBuf},
+};
 use termcolor::{Color, ColorSpec, StandardStream};
 
 /// Object containing more information about the results of `check_paths`, such as number and names

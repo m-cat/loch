@@ -4,11 +4,9 @@ mod cli;
 mod error;
 mod util;
 
-use crate::cli::Cli;
-use crate::error::LochResult;
+use crate::{cli::Cli, error::LochResult};
 use loch;
-use std::io::Write;
-use std::process;
+use std::{io::Write, process};
 use termcolor::{Color, ColorSpec, WriteColor};
 
 fn main() -> LochResult<()> {
