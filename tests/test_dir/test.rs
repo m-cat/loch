@@ -1,3 +1,3 @@
 //! Example Rust file
-//test.com/
-// sub.test.com/
+//google.com/
+// domains.google.com/

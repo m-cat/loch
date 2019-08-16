@@ -2,12 +2,11 @@
 
 #![deny(missing_docs)]
 
-pub mod util;
-
 mod config;
 mod error;
 mod parse;
 mod url;
+mod util;
 
 pub use config::Config;
 
@@ -61,7 +60,7 @@ pub struct FileUrl {
     pub url: String,
 }
 
-// FIXME: loch will check files more than once if they are passed in multiple times.
+// NOTE: loch will check files more than once if they are passed in multiple times.
 /// "Link-out check" all paths passed in.
 /// Returns a list of `FileUrl` objects containing the URL and where it was found.
 /// If any path is a directory, will get a list of files in the directory and process the list.

@@ -1,7 +1,7 @@
 use pretty_assertions::assert_eq;
 use std::fmt::Debug;
 
-// Asserts that the lists contain the same elements, unordered.
+/// Asserts that the lists contain the same elements, unordered.
 pub fn assert_list_eq<T>(list1: &[T], list2: &[T])
 where
     T: Clone + Debug + Ord,

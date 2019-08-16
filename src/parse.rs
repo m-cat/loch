@@ -44,19 +44,19 @@ pub fn get_urls(line: &str, no_http: bool) -> Vec<&str> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::get_urls;
+    use crate::{url, util::test_utils};
 
     #[test]
     fn parse_urls_http() {
         macro_rules! test_parse {
             ($s:expr, $res:expr $(,)?) => {
+                assert!(url::split_pattern($s).is_some());
+
                 let mut urls = get_urls($s, false);
                 urls.sort();
                 urls.dedup();
-                assert!(
-                    list_eq(&urls, $res),
-                    format!("Parsed URLs: {:?}, Expected URLs: {:?}", urls, $res)
-                )
+                test_utils::assert_list_eq(&urls, $res);
             };
         }
 
@@ -134,13 +134,12 @@ mod tests {
     fn parse_urls_nohttp() {
         macro_rules! test_parse {
             ($s:expr, $res:expr $(,)?) => {
+                assert!(url::split_pattern($s).is_some());
+
                 let mut urls = get_urls($s, true);
                 urls.sort();
                 urls.dedup();
-                assert!(
-                    list_eq(&urls, $res),
-                    format!("Parsed URLs: {:?}, Expected URLs: {:?}", urls, $res)
-                )
+                test_utils::assert_list_eq(&urls, $res);
             };
         }
 
@@ -222,12 +221,7 @@ mod tests {
 
         test_parse!(
             "//test.com/ ftp://test.com/page ://test.com/",
-            &["test.com/", "fpt://test.com/page"]
+            &["test.com/", "ftp://test.com/page"]
         );
-    }
-
-    // Return true if the lists contain the same elements.
-    fn list_eq(vec1: &[&str], vec2: &[&str]) -> bool {
-        vec1.iter().all(|s| vec2.contains(s)) && vec2.iter().all(|s| vec1.contains(s))
     }
 }
