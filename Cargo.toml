@@ -18,8 +18,12 @@ clap = "2"
 curl = "0.4"
 ignore = "0.4"
 lazy_static = "1"
-regex = "1"
 termcolor = "1"
+
+[dependencies.regex]
+version = "1"
+default-features = false
+features = ["std", "perf", "unicode-perl"]
 
 [dev-dependencies]
 pretty_assertions = "0.6"

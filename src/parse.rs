@@ -5,9 +5,11 @@ use regex::Regex;
 pub fn get_urls(line: &str, no_http: bool) -> Vec<&str> {
     lazy_static! {
         static ref FORBIDDEN: &'static str = r##" "<>\^`\{\|\}"##;
-        static ref INVALID: String = { let mut invalid = FORBIDDEN.to_string();
-                                       invalid.push_str(r##"\s\[\]\(\),"##);
-                                       invalid };
+        static ref INVALID: String = {
+            let mut invalid = FORBIDDEN.to_string();
+            invalid.push_str(r##"\s\[\]\(\),"##);
+            invalid
+        };
         static ref VALID_CHARS: String =
             r##"[^[INVALID]]"##.replace("[INVALID]", &INVALID);
         static ref BOUNDARY_CHARS: String =
