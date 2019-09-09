@@ -1,5 +1,7 @@
 //! Loch: Link-out check. Pronounced "loch".
 
+#![forbid(unsafe_code)]
+
 mod cli;
 mod error;
 mod util;

@@ -1,5 +1,6 @@
 //! Loch library. Provides `check_paths` for other applications.
 
+#![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
 mod config;

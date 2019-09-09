@@ -2,6 +2,7 @@
 
 [![Build Status](https://travis-ci.com/m-cat/loch.svg?branch=master)](https://travis-ci.com/m-cat/loch)
 [![crates.io](https://img.shields.io/crates/v/loch.svg)](https://crates.io/crates/loch)
+[![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
 [![Downloads](https://img.shields.io/crates/d/loch.svg)](https://crates.io/crates/loch)
 [![Documentation](https://docs.rs/loch/badge.svg)](https://docs.rs/loch)
 [![Issues](https://img.shields.io/github/issues-raw/m-cat/loch.svg)](https://github.com/m-cat/loch/issues)
