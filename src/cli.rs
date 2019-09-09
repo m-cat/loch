@@ -1,6 +1,8 @@
 //! Command-line interface for loch.
 
-use clap::{clap_app, crate_authors, crate_description, crate_version, ArgMatches, Values};
+use clap::{
+    clap_app, crate_authors, crate_description, crate_version, AppSettings, ArgMatches, Values,
+};
 use loch::Config;
 
 // Split an input string by valid delimiters (spaces and commas).
@@ -56,6 +58,7 @@ impl<'a> Cli<'a> {
             (@arg input: ...
                 "The input files and/or directories to be checked")
         )
+        .global_setting(AppSettings::ColoredHelp)
         .get_matches();
 
         Cli { matches }
