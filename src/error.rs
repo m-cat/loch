@@ -1,11 +1,13 @@
 use curl;
 use ignore;
-use std::{fmt, io};
+use std::{fmt, io, result};
 
-pub type LochResult<T> = Result<T, LochError>;
+/// Result type of this crate.
+pub type Result<T> = result::Result<T, Error>;
 
+/// Error type of this crate.
 #[derive(Debug)]
-pub enum LochError {
+pub enum Error {
     /// A curl error.
     Curl(curl::Error),
     /// An ignore error.
@@ -16,9 +18,9 @@ pub enum LochError {
     Io(io::Error),
 }
 
-impl fmt::Display for LochError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use LochError::*;
+        use Error::*;
 
         match *self {
             Curl(ref e) => write!(f, "{}", e),
@@ -29,20 +31,20 @@ impl fmt::Display for LochError {
     }
 }
 
-impl From<io::Error> for LochError {
+impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
-        LochError::Io(err)
+        Self::Io(err)
     }
 }
 
-impl From<ignore::Error> for LochError {
+impl From<ignore::Error> for Error {
     fn from(err: ignore::Error) -> Self {
-        LochError::Ignore(err)
+        Self::Ignore(err)
     }
 }
 
-impl From<curl::Error> for LochError {
+impl From<curl::Error> for Error {
     fn from(err: curl::Error) -> Self {
-        LochError::Curl(err)
+        Self::Curl(err)
     }
 }

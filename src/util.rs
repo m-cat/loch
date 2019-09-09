@@ -1,6 +1,6 @@
 //! Utility.
 
-use crate::error::LochResult;
+use crate::error::Result;
 use atty::{self, Stream};
 use std::{env, io::Write};
 use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
@@ -28,11 +28,7 @@ pub fn init_color_stderr(no_color: bool) -> StandardStream {
     StandardStream::stderr(ColorChoice::Auto)
 }
 
-pub fn set_and_unset_color(
-    stream: &mut StandardStream,
-    s: &str,
-    color: &ColorSpec,
-) -> LochResult<()> {
+pub fn set_and_unset_color(stream: &mut StandardStream, s: &str, color: &ColorSpec) -> Result<()> {
     stream.set_color(color)?;
     write!(stream, "{}", s)?;
     stream.reset()?;

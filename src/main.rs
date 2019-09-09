@@ -6,17 +6,19 @@ mod cli;
 mod error;
 mod util;
 
-use crate::{cli::Cli, error::LochResult};
+use crate::{cli::Cli, error::Result};
 use loch;
 use std::{io::Write, process};
 use termcolor::{Color, ColorSpec, WriteColor};
 
-fn main() -> LochResult<()> {
+fn main() -> Result<()> {
     let cli = Cli::from_args();
     let input_paths = cli.input();
     let config = cli.to_config();
 
     let verbose = config.verbose;
+
+    // Initialize printing.
 
     let mut stdout = util::init_color_stdout(config.no_color);
     let mut stderr = util::init_color_stderr(config.no_color);
@@ -39,6 +41,8 @@ fn main() -> LochResult<()> {
         .set_fg(Some(Color::Red))
         .set_intense(false)
         .set_bold(true);
+
+    // Begin logic.
 
     match loch::check_paths(&input_paths, Some(&config)) {
         Ok(info) => {

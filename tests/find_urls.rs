@@ -2,7 +2,7 @@ extern crate loch;
 
 mod util;
 
-use loch::{Config, FileUrl};
+use loch::{Config, FileUrl, Result};
 use std::path::PathBuf;
 
 static TEST_DIR: &str = "tests/test_dir/";
@@ -19,10 +19,10 @@ fn fileurl(bad: bool, excluded: bool, filepath: &str, line: usize, url: &str) ->
 }
 
 #[test]
-fn find_urls_http() {
+fn find_urls_http() -> Result<()> {
     let config = Config::new().list_urls().silent();
 
-    let info = loch::check_paths(&[TEST_DIR], Some(&config)).unwrap();
+    let info = loch::check_paths(&[TEST_DIR], Some(&config))?;
 
     let urls_list = info.urls_list.unwrap();
 
@@ -34,13 +34,15 @@ fn find_urls_http() {
         ],
     );
     assert_eq!(urls_list.len() as u64, info.num_urls);
+
+    Ok(())
 }
 
 #[test]
-fn find_urls_nohttp() {
+fn find_urls_nohttp() -> Result<()> {
     let config = Config::new().list_urls().no_http().silent();
 
-    let info = loch::check_paths(&[TEST_DIR], Some(&config)).unwrap();
+    let info = loch::check_paths(&[TEST_DIR], Some(&config))?;
 
     let urls_list = info.urls_list.unwrap();
 
@@ -55,19 +57,21 @@ fn find_urls_nohttp() {
         ],
     );
     assert_eq!(urls_list.len() as u64, info.num_urls);
+
+    Ok(())
 }
 
 // TODO: Un-ignore this test
 #[ignore]
 #[test]
-fn find_urls_nohttp_excluded() {
+fn find_urls_nohttp_excluded() -> Result<()> {
     let config = Config::new()
         .list_urls()
         .no_http()
         .exclude_urls(&["google.com", "http://www.example.co"])
         .silent();
 
-    let info = loch::check_paths(&[TEST_DIR], Some(&config)).unwrap();
+    let info = loch::check_paths(&[TEST_DIR], Some(&config))?;
 
     let urls_list = info.urls_list.unwrap();
 
@@ -79,4 +83,6 @@ fn find_urls_nohttp_excluded() {
         ],
     );
     assert_eq!(urls_list.len() as u64, info.num_urls);
+
+    Ok(())
 }

@@ -10,17 +10,16 @@ mod url;
 mod util;
 
 pub use config::Config;
+pub use error::{Error, Result};
 
-use crate::{
-    error::{LochError, LochResult},
-    url::ExclusionPattern,
-};
+use crate::url::ExclusionPattern;
 use curl::easy::{Easy2, Handler, WriteError};
 use ignore::{overrides::OverrideBuilder, WalkBuilder};
 use std::{
     fs::File,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
+    result,
 };
 use termcolor::{Color, ColorSpec, StandardStream};
 
@@ -66,7 +65,7 @@ pub struct FileUrl {
 /// Returns a list of `FileUrl` objects containing the URL and where it was found.
 /// If any path is a directory, will get a list of files in the directory and process the list.
 /// Writes to stdout if `config.verbose` is set.
-pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> LochResult<Info> {
+pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info> {
     if input_paths.is_empty() {
         return Ok(Default::default());
     }
@@ -88,7 +87,7 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> LochResult<
                         path,
                     })
                 } else {
-                    Err(LochError::InvalidPattern(url_pattern.clone()))
+                    Err(Error::InvalidPattern(url_pattern.clone()))
                 }
             })
             .collect()
@@ -154,8 +153,8 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> LochResult<
     // Initialize logic.
 
     // Initialize lists.
-    let mut files_list = if list_files { Some(Vec::new()) } else { None };
-    let mut urls_list = if list_urls { Some(Vec::new()) } else { None };
+    let mut files_list = if list_files { Some(vec![]) } else { None };
+    let mut urls_list = if list_urls { Some(vec![]) } else { None };
 
     // Initialize variables.
     let mut num_files = 0;
@@ -249,7 +248,7 @@ fn check_file(
     exclude_urls: &[ExclusionPattern],
     mut stdout: &mut StandardStream,
     mut stderr: &mut StandardStream,
-) -> LochResult<(Vec<FileUrl>, u64, u64)> {
+) -> Result<(Vec<FileUrl>, u64, u64)> {
     let mut file_urls = Vec::new();
     let mut num_urls = 0;
     let mut num_bad_urls = 0;
@@ -337,7 +336,7 @@ fn check_file(
 struct Collector(Vec<u8>);
 
 impl Handler for Collector {
-    fn write(&mut self, data: &[u8]) -> Result<usize, WriteError> {
+    fn write(&mut self, data: &[u8]) -> result::Result<usize, WriteError> {
         self.0.extend_from_slice(data);
         Ok(data.len())
     }
@@ -345,7 +344,7 @@ impl Handler for Collector {
 
 // Return `true` if the URL is bad.
 // TODO: reuse the same handler between calls.
-fn check_url(url: &str) -> LochResult<bool> {
+fn check_url(url: &str) -> Result<bool> {
     let mut handle = Easy2::new(Collector(Vec::new()));
 
     handle.url(url)?;

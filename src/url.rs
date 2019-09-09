@@ -1,4 +1,4 @@
-use crate::error::{LochError, LochResult};
+use crate::{Error, Result};
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -32,9 +32,9 @@ pub fn url_matches_pattern(url: &str, pattern: &ExclusionPattern) -> bool {
 }
 
 /// Returns true if the URL is a match of the URL exclusion pattern.
-pub fn url_matches_url_pattern(url: &str, url_pattern: &str) -> LochResult<bool> {
-    let (prefix, domains, path) = split_pattern(url_pattern)
-        .ok_or_else(|| LochError::InvalidPattern(url_pattern.to_string()))?;
+pub fn url_matches_url_pattern(url: &str, url_pattern: &str) -> Result<bool> {
+    let (prefix, domains, path) =
+        split_pattern(url_pattern).ok_or_else(|| Error::InvalidPattern(url_pattern.to_string()))?;
 
     let pattern = ExclusionPattern {
         prefix,
