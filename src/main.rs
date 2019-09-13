@@ -7,9 +7,16 @@ mod error;
 mod util;
 
 use crate::{cli::Cli, error::Result};
+use lazy_static::lazy_static;
 use loch;
 use std::{io::Write, process};
 use termcolor::{Color, ColorSpec, WriteColor};
+
+// Define colors.
+lazy_static! {
+    static ref COLOR_GOOD: ColorSpec = util::define_color(Color::Green, true);
+    static ref COLOR_ERR: ColorSpec = util::define_color(Color::Red, true);
+}
 
 fn main() -> Result<()> {
     let cli = Cli::from_args();
@@ -30,30 +37,18 @@ fn main() -> Result<()> {
         )?;
     }
 
-    // Define colors.
-    let mut color1 = ColorSpec::new();
-    color1
-        .set_fg(Some(Color::Green))
-        .set_intense(false)
-        .set_bold(true);
-    let mut color2 = ColorSpec::new();
-    color2
-        .set_fg(Some(Color::Red))
-        .set_intense(false)
-        .set_bold(true);
-
     // Begin logic.
 
     match loch::check_paths(&input_paths, Some(&config)) {
         Ok(info) => {
             if info.num_bad_urls > 0 {
-                stderr.set_color(&color2)?;
+                stderr.set_color(&COLOR_ERR)?;
                 writeln!(&mut stderr, "({}) bad URLs found!", info.num_bad_urls)?;
                 stderr.reset()?;
 
                 process::exit(1);
             } else {
-                util::set_and_unset_color(&mut stdout, "No bad URLs found.", &color1)?;
+                util::set_and_unset_color(&mut stdout, "No bad URLs found.", &COLOR_GOOD)?;
                 writeln!(&mut stdout)?;
 
                 if verbose {
@@ -70,7 +65,7 @@ fn main() -> Result<()> {
         Err(error) => {
             // If an error occurred, display it to stderr and return code 1.
 
-            util::set_and_unset_color(&mut stderr, "error:", &color2)?;
+            util::set_and_unset_color(&mut stderr, "error:", &COLOR_ERR)?;
             writeln!(&mut stderr, " {}", error)?;
             stderr.reset()?;
 

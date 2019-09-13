@@ -3,9 +3,15 @@
 use crate::error::Result;
 use atty::{self, Stream};
 use std::{env, io::Write};
-use termcolor::{ColorChoice, ColorSpec, StandardStream, WriteColor};
+use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 static NO_COLOR: &str = "NO_COLOR";
+
+pub fn define_color(color: Color, bold: bool) -> ColorSpec {
+    let mut c = ColorSpec::new();
+    c.set_fg(Some(color)).set_bold(bold);
+    c
+}
 
 /// Returns true if the `NO_COLOR` environment variable is set.
 pub fn env_no_color() -> bool {

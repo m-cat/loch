@@ -17,8 +17,6 @@ pub struct Config {
     pub follow: bool,
     /// List all files visited, populating them into the `Info` struct.
     pub list_files: bool,
-    /// List all URLs visited, populating them into the `Info` struct.
-    pub list_urls: bool,
     /// Disable URL checking.
     pub no_check: bool,
     /// Disable color output.
@@ -35,11 +33,6 @@ pub struct Config {
 }
 
 impl Config {
-    /// Create a new default `Config` object.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Set all_urls=true.
     pub fn all_urls(mut self) -> Self {
         self.all_urls = true;
@@ -67,12 +60,6 @@ impl Config {
     /// Set list_files=true.
     pub fn list_files(mut self) -> Self {
         self.list_files = true;
-        self
-    }
-
-    /// Set list_urls=true.
-    pub fn list_urls(mut self) -> Self {
-        self.list_urls = true;
         self
     }
 

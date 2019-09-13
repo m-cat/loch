@@ -88,8 +88,6 @@ impl<'a> Cli<'a> {
             follow: self.matches.is_present("follow"),
             // Not for interactive use. Verbose already displays all files.
             list_files: false,
-            // Not for interactive use. Verbose already displays all URLs.
-            list_urls: false,
             no_check: self.matches.is_present("no_check"),
             no_color: self.matches.is_present("no_color"),
             no_ignore: self.matches.is_present("no_ignore"),

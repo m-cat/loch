@@ -15,6 +15,7 @@ pub use error::{Error, Result};
 use crate::url::ExclusionPattern;
 use curl::easy::{Easy2, Handler, WriteError};
 use ignore::{overrides::OverrideBuilder, WalkBuilder};
+use lazy_static::lazy_static;
 use std::{
     fs::File,
     io::{BufRead, BufReader, Write},
@@ -23,24 +24,31 @@ use std::{
 };
 use termcolor::{Color, ColorSpec, StandardStream};
 
+// Define colors.
+lazy_static! {
+    static ref COLOR_INFO: ColorSpec = util::define_color(Color::Cyan, true);
+    static ref COLOR_ERR: ColorSpec = util::define_color(Color::Red, true);
+    static ref COLOR_PARAM: ColorSpec = util::define_color(Color::Magenta, false);
+    static ref COLOR_CHECK: ColorSpec = util::define_color(Color::Blue, true);
+}
+
 /// Object containing more information about the results of `check_paths`, such as number and names
 /// of files and URLs processed.
 #[derive(Debug, Default)]
 pub struct Info {
-    /// List of file names that were processed.
-    /// Will only be set if `check_paths` was called with a `Config` with `list_files` set.
-    pub files_list: Option<Vec<PathBuf>>,
     /// List of `FileUrl`s that were processed.
+    pub file_urls: Vec<FileUrl>,
+    /// List of files that were processed.
     /// Will only be set if `check_paths` was called with a `Config` with `list_urls` set.
-    pub urls_list: Option<Vec<FileUrl>>,
+    pub files: Option<Vec<PathBuf>>,
     // TODO: implement and test.
-    /// Total number of files processed.
+    /// Total number of distinct files processed.
     pub num_files: u64,
     // TODO: implement and test.
-    /// Total number of URLs processed.
+    /// Total number of distinct URLs processed.
     pub num_urls: u64,
     // TODO: implement and test.
-    /// Total number of bad URLs found.
+    /// Total number of distinct bad URLs found.
     pub num_bad_urls: u64,
 }
 
@@ -48,16 +56,16 @@ pub struct Info {
 /// If the URL could not be resolved, the `bad` field will be set.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FileUrl {
-    /// If the URL was checked, the inner value will be true if the URL failed to resolve.
-    pub bad: Option<bool>,
-    /// Whether this URL was excluded via --exclude-urls.
-    pub excluded: bool,
+    /// The URL.
+    pub url: String,
     /// The path to the file containing the URL.
     pub filepath: PathBuf,
     /// The line the URL was found on.
     pub line: usize,
-    /// The URL.
-    pub url: String,
+    /// If the URL was checked, the inner value will be true if the URL failed to resolve.
+    pub bad: Option<bool>,
+    /// Whether this URL was excluded via --exclude-urls.
+    pub excluded: bool,
 }
 
 // NOTE: loch will check files more than once if they are passed in multiple times.
@@ -99,7 +107,6 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
     // Get flags.
     let follow = config.map_or(false, |config| config.follow);
     let list_files = config.map_or(false, |config| config.list_files);
-    let list_urls = config.map_or(false, |config| config.list_urls);
     let no_check = config.map_or(false, |config| config.no_check);
     let no_color = config.map_or(false, |config| config.no_color);
     let no_http = config.map_or(false, |config| config.no_http);
@@ -113,53 +120,41 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
     let mut stdout = util::init_color_stdout(no_color);
     let mut stderr = util::init_color_stderr(no_color);
 
-    // Define colors.
-    let mut color1 = ColorSpec::new();
-    color1.set_fg(Some(Color::Cyan)).set_bold(true);
-    let mut color2 = ColorSpec::new();
-    color2.set_fg(Some(Color::Magenta));
-    let mut color3 = ColorSpec::new();
-    color3.set_fg(Some(Color::Cyan)).set_bold(true);
-    let mut color4 = ColorSpec::new();
-    color4.set_fg(Some(Color::Red));
-
     // Print out input values.
     if verbose {
-        util::set_and_unset_color(&mut stdout, "Input paths:", &color1)?;
+        util::set_and_unset_color(&mut stdout, "Input paths:", &COLOR_INFO)?;
         writeln!(stdout, " {:?}", input_paths)?;
-        util::set_and_unset_color(&mut stdout, "Parameters:", &color1)?;
+        util::set_and_unset_color(&mut stdout, "Parameters:", &COLOR_INFO)?;
         writeln!(stdout)?;
 
         // Display CLI arguments only (API-only arguments can be accessed programmatically).
         // TODO: Add all parameters here.
-        util::set_and_unset_color(&mut stdout, "  exclude-paths:", &color2)?;
+        util::set_and_unset_color(&mut stdout, "  exclude-paths:", &COLOR_PARAM)?;
         writeln!(stdout, " {:?}", exclude_paths)?;
-        util::set_and_unset_color(&mut stdout, "  exclude-urls:", &color2)?;
+        util::set_and_unset_color(&mut stdout, "  exclude-urls:", &COLOR_PARAM)?;
         writeln!(stdout, " {:?}", exclude_urls)?;
-        util::set_and_unset_color(&mut stdout, "  follow:", &color2)?;
+        util::set_and_unset_color(&mut stdout, "  follow:", &COLOR_PARAM)?;
         writeln!(stdout, " {}", follow)?;
-        util::set_and_unset_color(&mut stdout, "  no-check", &color2)?;
+        util::set_and_unset_color(&mut stdout, "  no-check", &COLOR_PARAM)?;
         writeln!(stdout, " {}", no_check)?;
-        util::set_and_unset_color(&mut stdout, "  no-color:", &color2)?;
+        util::set_and_unset_color(&mut stdout, "  no-color:", &COLOR_PARAM)?;
         writeln!(stdout, " {}", no_color)?;
-        util::set_and_unset_color(&mut stdout, "  no-http:", &color2)?;
+        util::set_and_unset_color(&mut stdout, "  no-http:", &COLOR_PARAM)?;
         writeln!(stdout, " {}", no_http)?;
-        util::set_and_unset_color(&mut stdout, "  no-ignore:", &color2)?;
+        util::set_and_unset_color(&mut stdout, "  no-ignore:", &COLOR_PARAM)?;
         writeln!(stdout, " {}", no_ignore)?;
-        util::set_and_unset_color(&mut stdout, "  verbose:", &color2)?;
+        util::set_and_unset_color(&mut stdout, "  verbose:", &COLOR_PARAM)?;
         writeln!(stdout, " {}", verbose)?;
     }
 
     // Initialize logic.
 
     // Initialize lists.
-    let mut files_list = if list_files { Some(vec![]) } else { None };
-    let mut urls_list = if list_urls { Some(vec![]) } else { None };
+    let mut files = if list_files { Some(vec![]) } else { None };;
+    let mut file_urls = vec![];
 
     // Initialize variables.
     let mut num_files = 0;
-    let mut num_urls = 0;
-    let mut num_bad_urls = 0;
 
     // Construct the file walker.
     let mut walk_builder = WalkBuilder::new(input_paths[0]);
@@ -197,38 +192,37 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
 
         if file_type.is_file() {
             if verbose {
-                util::set_and_unset_color(&mut stdout, "Searching", &color3)?;
+                util::set_and_unset_color(&mut stdout, "Searching", &COLOR_INFO)?;
 
                 writeln!(stdout, " {}", path_str)?;
             }
 
-            let (file_urls, urls, bad_urls) = check_file(
-                path,
-                verbose,
-                silent,
-                no_check,
-                no_http,
-                &exclude_urls,
-                &mut stdout,
-                &mut stderr,
-            )?;
+            // Get the URLs in this file.
+            let mut new_file_urls = get_file_urls(path, no_http, &exclude_urls)?;
 
-            if let Some(ref mut urls) = urls_list {
-                urls.extend(file_urls);
-            }
-            num_urls += urls;
-            num_bad_urls += bad_urls;
+            file_urls.append(&mut new_file_urls);
 
-            if let Some(ref mut files) = files_list {
+            if let Some(ref mut files) = files {
                 files.push(path.to_owned());
             }
             num_files += 1;
         }
     }
 
+    // Check the list of found URLs.
+
+    let (num_urls, num_bad_urls) = check_urls(
+        &mut file_urls,
+        verbose,
+        silent,
+        no_check,
+        &mut stdout,
+        &mut stderr,
+    )?;
+
     let info = Info {
-        files_list,
-        urls_list,
+        file_urls,
+        files,
         num_files,
         num_urls,
         num_bad_urls,
@@ -237,29 +231,14 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
     Ok(info)
 }
 
-// Checks a file's URLs and returns a list of URLs processed, the number of URLs processed, and the
-// number of bad URLs.
-fn check_file(
+// Gets a file's URLs.
+fn get_file_urls(
     filepath: &Path,
-    verbose: bool,
-    silent: bool,
-    no_check: bool,
     no_http: bool,
     exclude_urls: &[ExclusionPattern],
-    mut stdout: &mut StandardStream,
-    mut stderr: &mut StandardStream,
-) -> Result<(Vec<FileUrl>, u64, u64)> {
-    let mut file_urls = Vec::new();
-    let mut num_urls = 0;
-    let mut num_bad_urls = 0;
+) -> Result<Vec<FileUrl>> {
+    let mut file_urls = vec![];
     let mut line_num = 1;
-
-    // Define colors.
-
-    let mut color1 = ColorSpec::new();
-    color1.set_fg(Some(Color::Blue)).set_bold(true);
-    let mut color2 = ColorSpec::new();
-    color2.set_fg(Some(Color::Red)).set_bold(true);
 
     // Get file contents.
     let file = File::open(filepath)?;
@@ -267,70 +246,113 @@ fn check_file(
 
     for line in reader.lines() {
         for url in parse::get_urls(&line?, no_http) {
-            if !url.is_empty() {
-                let excluded = url::is_url_excluded(url, exclude_urls);
+            let excluded = url::is_url_excluded(url, exclude_urls);
 
-                // Check URL.
-                if verbose {
-                    util::set_and_unset_color(
-                        &mut stdout,
-                        if no_check {
-                            "Not checking"
-                        } else if excluded {
-                            "Skipping"
-                        } else {
-                            "Checking"
-                        },
-                        &color1,
-                    )?;
-
-                    writeln!(
-                        stdout,
-                        " {} ({}:{})",
-                        url,
-                        filepath.to_str().unwrap(),
-                        line_num
-                    )?;
-                }
-
-                let bad = if no_check || excluded {
-                    None
-                } else {
-                    Some(check_url(url)?)
-                };
-
-                if let Some(true) = bad {
-                    if !silent {
-                        util::set_and_unset_color(&mut stderr, "Bad url:", &color2)?;
-
-                        writeln!(
-                            stderr,
-                            " {} ({}:{})",
-                            url,
-                            filepath.to_str().unwrap(),
-                            line_num
-                        )?;
-                    }
-
-                    num_bad_urls += 1;
-                }
-
-                num_urls += 1;
-
-                file_urls.push(FileUrl {
-                    bad,
-                    excluded,
-                    filepath: filepath.to_owned(),
-                    line: line_num,
-                    url: url.to_string(),
-                });
-            }
+            file_urls.push(FileUrl {
+                url: url.to_string(),
+                filepath: filepath.to_owned(),
+                line: line_num,
+                bad: None,
+                excluded,
+            });
         }
 
         line_num += 1;
     }
 
-    Ok((file_urls, num_urls, num_bad_urls))
+    Ok(file_urls)
+}
+
+// Checks a list of URLs and returns the list of URLs processed, the number of URLs processed, and
+// the number of bad URLs.
+fn check_urls(
+    file_urls: &mut Vec<FileUrl>,
+    verbose: bool,
+    silent: bool,
+    no_check: bool,
+    mut stdout: &mut StandardStream,
+    mut stderr: &mut StandardStream,
+) -> Result<(u64, u64)> {
+    let mut num_urls = 0;
+    let mut num_bad_urls = 0;
+
+    // Begin logic.
+
+    // Sort the list first. We won't check the same URL twice.
+    file_urls.sort();
+
+    let mut prev_file_url: Option<&mut FileUrl> = None;
+    for mut file_url in file_urls {
+        let url = &file_url.url;
+
+        if verbose {
+            util::set_and_unset_color(
+                &mut stdout,
+                if no_check {
+                    "Not checking"
+                } else if file_url.excluded {
+                    "Skipping"
+                } else {
+                    "Checking"
+                },
+                &COLOR_CHECK,
+            )?;
+
+            writeln!(
+                stdout,
+                " {} ({}:{})",
+                url,
+                file_url.filepath.to_str().unwrap(),
+                file_url.line
+            )?;
+        }
+
+        // If the previous URL was the same, reuse the `bad` value.
+        // TODO: Only display check if the previous URL and file weren't the same.
+        let mut prev_bad = None;
+        if let Some(prev_file_url) = prev_file_url {
+            if prev_file_url.url == *url {
+                prev_bad = Some(prev_file_url.bad);
+            }
+        }
+        if prev_bad.is_none() {
+            num_urls += 1;
+        }
+
+        // Process URL.
+
+        let bad = if let Some(prev_bad) = prev_bad {
+            prev_bad
+        } else if no_check || file_url.excluded {
+            None
+        } else {
+            // Check the URL.
+            Some(check_url(&url)?)
+        };
+
+        if let Some(true) = bad {
+            if !silent {
+                util::set_and_unset_color(&mut stderr, "Bad url:", &COLOR_ERR)?;
+
+                writeln!(
+                    stderr,
+                    " {} ({}:{})",
+                    url,
+                    file_url.filepath.to_str().unwrap(),
+                    file_url.line
+                )?;
+            }
+
+            num_bad_urls += 1;
+        }
+
+        // Set the `bad` field.
+        file_url.bad = bad;
+
+        prev_file_url = Some(file_url);
+    }
+
+    Ok((num_urls, num_bad_urls))
 }
 
 struct Collector(Vec<u8>);

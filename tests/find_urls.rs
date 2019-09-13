@@ -8,55 +8,53 @@ use std::path::PathBuf;
 static TEST_DIR: &str = "tests/test_dir/";
 
 // Construct a FileUrl.
-fn fileurl(bad: bool, excluded: bool, filepath: &str, line: usize, url: &str) -> FileUrl {
+fn fileurl(url: &str, filepath: &str, line: usize, bad: bool, excluded: bool) -> FileUrl {
     FileUrl {
-        bad: Some(bad),
-        excluded,
+        url: url.into(),
         filepath: PathBuf::from(format!("{}{}", TEST_DIR, filepath)),
         line,
-        url: url.into(),
+        bad: Some(bad),
+        excluded,
     }
 }
 
 #[test]
 fn find_urls_http() -> Result<()> {
-    let config = Config::new().list_urls().silent();
+    let config = Config::default().silent();
 
     let info = loch::check_paths(&[TEST_DIR], Some(&config))?;
 
-    let urls_list = info.urls_list.unwrap();
-
     util::assert_list_eq(
-        &urls_list,
+        &info.file_urls,
         &[
-            fileurl(true, false, "example", 1, "http://www.example.co"),
-            fileurl(true, false, "test.txt", 1, "http:////test"),
+            fileurl("http://www.example.co", "example", 1, true, false),
+            fileurl("http:////test", "test.txt", 1, true, false),
         ],
     );
-    assert_eq!(urls_list.len() as u64, info.num_urls);
+    assert_eq!(info.num_urls, 2);
+    assert_eq!(info.num_files, 5);
 
     Ok(())
 }
 
 #[test]
 fn find_urls_nohttp() -> Result<()> {
-    let config = Config::new().list_urls().no_http().silent();
+    let config = Config::default().no_http().silent();
 
     let info = loch::check_paths(&[TEST_DIR], Some(&config))?;
 
-    let urls_list = info.urls_list.unwrap();
-
     util::assert_list_eq(
-        &urls_list,
+        &info.file_urls,
         &[
-            fileurl(false, false, "test.rs", 2, "google.com/"),
-            fileurl(false, false, "test.rs", 3, "domains.google.com/"),
-            fileurl(true, false, "test", 1, "testing.test/page"),
-            fileurl(true, false, "example", 1, "http://www.example.co"),
-            fileurl(false, false, "example.txt", 1, "example.com/"),
+            fileurl("google.com/", "test.rs", 2, false, false),
+            fileurl("domains.google.com/", "test.rs", 3, false, false),
+            fileurl("testing.test/page", "test", 1, true, false),
+            fileurl("http://www.example.co", "example", 1, true, false),
+            fileurl("example.com/", "example.txt", 1, false, false),
         ],
     );
-    assert_eq!(urls_list.len() as u64, info.num_urls);
+    assert_eq!(info.num_urls, 5);
+    assert_eq!(info.num_files, 5);
 
     Ok(())
 }
@@ -65,24 +63,22 @@ fn find_urls_nohttp() -> Result<()> {
 #[ignore]
 #[test]
 fn find_urls_nohttp_excluded() -> Result<()> {
-    let config = Config::new()
-        .list_urls()
+    let config = Config::default()
         .no_http()
         .exclude_urls(&["google.com", "http://www.example.co"])
         .silent();
 
     let info = loch::check_paths(&[TEST_DIR], Some(&config))?;
 
-    let urls_list = info.urls_list.unwrap();
-
     util::assert_list_eq(
-        &urls_list,
+        &info.file_urls,
         &[
-            fileurl(true, false, "test", 1, "testing.test/page"),
-            fileurl(false, false, "example.txt", 1, "example.com/"),
+            fileurl("testing.test/page", "test", 1, true, false),
+            fileurl("example.com/", "example.txt", 1, false, false),
         ],
     );
-    assert_eq!(urls_list.len() as u64, info.num_urls);
+    assert_eq!(info.num_urls, 2);
+    assert_eq!(info.num_files, 5);
 
     Ok(())
 }

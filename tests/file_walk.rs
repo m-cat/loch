@@ -18,17 +18,15 @@ fn files_vec(paths: &[&str]) -> Vec<PathBuf> {
 // Test that all files are visited.
 #[test]
 fn all_files() -> Result<()> {
-    let config = Config::new().no_check().list_files().silent();
+    let config = Config::default().list_files().no_check().silent();
 
     let info = loch::check_paths(&[TEST_DIR], Some(&config))?;
 
-    let files_list = info.files_list.unwrap();
-
     util::assert_list_eq(
-        &files_list,
+        &info.files.unwrap(),
         &files_vec(&["example", "example.txt", "test", "test.rs", "test.txt"]),
     );
-    assert_eq!(files_list.len() as u64, info.num_files);
+    assert_eq!(info.num_files, 5);
 
     Ok(())
 }
@@ -36,7 +34,7 @@ fn all_files() -> Result<()> {
 // Test ignoring files and glob patterns.
 #[test]
 fn exclude_files() -> Result<()> {
-    let config = Config::new()
+    let config = Config::default()
         .no_check()
         .list_files()
         .exclude_paths(&["*.txt", "test.*", "test"])
@@ -44,10 +42,8 @@ fn exclude_files() -> Result<()> {
 
     let info = loch::check_paths(&[TEST_DIR], Some(&config))?;
 
-    let files_list = info.files_list.unwrap();
-
-    util::assert_list_eq(&files_list, &files_vec(&["example"]));
-    assert_eq!(files_list.len() as u64, info.num_files);
+    util::assert_list_eq(&info.files.unwrap(), &files_vec(&["example"]));
+    assert_eq!(info.num_files, 1);
 
     Ok(())
 }
