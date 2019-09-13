@@ -23,6 +23,7 @@ termcolor = "1"
 [dependencies.regex]
 version = "1"
 default-features = false
+# Don't need most of the unicode features.
 features = ["std", "perf", "unicode-perl"]
 
 [dev-dependencies]

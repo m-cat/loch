@@ -281,6 +281,9 @@ fn check_urls(
     // Sort the list first. We won't check the same URL twice.
     file_urls.sort();
 
+    // Create the connection handle.
+    let mut handle = init_handle()?;
+
     let mut prev_file_url: Option<&mut FileUrl> = None;
     for mut file_url in file_urls {
         let url = &file_url.url;
@@ -327,7 +330,7 @@ fn check_urls(
             None
         } else {
             // Check the URL.
-            Some(check_url(&url)?)
+            Some(url_is_bad(&mut handle, &url)?)
         };
 
         if let Some(true) = bad {
@@ -364,13 +367,18 @@ impl Handler for Collector {
     }
 }
 
-// Return `true` if the URL is bad.
-// TODO: reuse the same handler between calls.
-fn check_url(url: &str) -> Result<bool> {
+// Initialize the curl handle which will be reused between calls.
+fn init_handle() -> Result<Easy2<Collector>> {
     let mut handle = Easy2::new(Collector(Vec::new()));
+    handle.get(true)?;
+    Ok(handle)
+}
 
+// Return `true` if the URL is bad.
+// TODO: add option for following/prohibiting redirects?
+fn url_is_bad(handle: &mut Easy2<Collector>, url: &str) -> Result<bool> {
     handle.url(url)?;
-    // handle.connect_only(true)?;
+
     match handle.perform() {
         Ok(_) => (),
         Err(_) => return Ok(true),
