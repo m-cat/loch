@@ -13,23 +13,30 @@ pub use config::Config;
 pub use error::{Error, Result};
 
 use crate::url::ExclusionPattern;
+use clap::crate_version;
 use curl::easy::{Easy2, Handler, WriteError};
 use ignore::{overrides::OverrideBuilder, WalkBuilder};
 use lazy_static::lazy_static;
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Write},
+    io::{self, BufRead, BufReader, Write},
     path::{Path, PathBuf},
     result,
+    time::Duration,
 };
 use termcolor::{Color, ColorSpec, StandardStream};
 
-// Define colors.
 lazy_static! {
+    // Define colors.
     static ref COLOR_INFO: ColorSpec = util::define_color(Color::Cyan, true);
+    static ref COLOR_WARN: ColorSpec = util::define_color(Color::Yellow, true);
     static ref COLOR_ERR: ColorSpec = util::define_color(Color::Red, true);
     static ref COLOR_PARAM: ColorSpec = util::define_color(Color::Magenta, false);
+    static ref COLOR_PARSE: ColorSpec = util::define_color(Color::Blue, true);
     static ref COLOR_CHECK: ColorSpec = util::define_color(Color::Blue, true);
+
+    // Fake user agent used in requests.
+    static ref USER_AGENT: String = format!("loch/{}", crate_version!());
 }
 
 /// Object containing more information about the results of `check_paths`, such as number and names
@@ -112,6 +119,8 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
     let no_http = config.map_or(false, |config| config.no_http);
     let no_ignore = config.map_or(false, |config| config.no_ignore);
     let silent = config.map_or(false, |config| config.silent);
+    let timeout = config.map_or(None, |config| config.timeout);
+
     let verbose = config.map_or(false, |config| config.verbose);
 
     // Initialize printing.
@@ -150,7 +159,7 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
     // Initialize logic.
 
     // Initialize lists.
-    let mut files = if list_files { Some(vec![]) } else { None };;
+    let mut files = if list_files { Some(vec![]) } else { None };
     let mut file_urls = vec![];
 
     // Initialize variables.
@@ -192,13 +201,26 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
 
         if file_type.is_file() {
             if verbose {
-                util::set_and_unset_color(&mut stdout, "Searching", &COLOR_INFO)?;
+                util::set_and_unset_color(&mut stdout, "Parsing", &COLOR_PARSE)?;
 
                 writeln!(stdout, " {}", path_str)?;
             }
 
             // Get the URLs in this file.
-            let mut new_file_urls = get_file_urls(path, no_http, &exclude_urls)?;
+            let mut new_file_urls = match get_file_urls(path, no_http, &exclude_urls) {
+                Err(Error::Io(ref err)) if err.kind() == io::ErrorKind::InvalidData => {
+                    if verbose {
+                        util::set_and_unset_color(
+                            &mut stderr,
+                            "Warning: file did not contain valid data. Skipping.\n",
+                            &COLOR_WARN,
+                        )?;
+                    }
+
+                    Ok(vec![])
+                }
+                res => res,
+            }?;
 
             file_urls.append(&mut new_file_urls);
 
@@ -216,6 +238,7 @@ pub fn check_paths(input_paths: &[&str], config: Option<&Config>) -> Result<Info
         verbose,
         silent,
         no_check,
+        timeout,
         &mut stdout,
         &mut stderr,
     )?;
@@ -263,74 +286,109 @@ fn get_file_urls(
     Ok(file_urls)
 }
 
-// Checks a list of URLs and returns the list of URLs processed, the number of URLs processed, and
-// the number of bad URLs.
+// Checks a list of URLs and returns the number of unique URLs processed, and the number of bad
+// URLs.
 fn check_urls(
     file_urls: &mut Vec<FileUrl>,
     verbose: bool,
     silent: bool,
     no_check: bool,
+    timeout: Option<u64>,
     mut stdout: &mut StandardStream,
     mut stderr: &mut StandardStream,
 ) -> Result<(u64, u64)> {
     let mut num_urls = 0;
     let mut num_bad_urls = 0;
 
-    // Begin logic.
-
     // Sort the list first. We won't check the same URL twice.
+    // TODO: Sort by host first, so that we can keep the same connection alive.
     file_urls.sort();
 
+    // Get a count of unique URLs.
+
+    let mut prev_file_url: Option<&FileUrl> = None;
+    for file_url in file_urls.iter() {
+        match prev_file_url {
+            Some(prev_file_url) => {
+                if prev_file_url.url == file_url.url {
+                    num_urls += 1;
+                }
+            }
+            None => num_urls += 1,
+        }
+
+        prev_file_url = Some(file_url);
+    }
+
+    // TODO: refactor and move this to main.
+    if num_urls > 0 {
+        util::set_and_unset_color(
+            &mut stdout,
+            &format!(
+                "\nChecking {} unique {}.\n\n",
+                num_urls,
+                if num_urls == 1 { "URL" } else { "URLs" }
+            ),
+            &COLOR_INFO,
+        );
+    }
+
+    // Begin logic.
+
     // Create the connection handle.
-    let mut handle = init_handle()?;
+    let mut handle = init_handle(timeout)?;
 
     let mut prev_file_url: Option<&mut FileUrl> = None;
     for mut file_url in file_urls {
         let url = &file_url.url;
 
+        // If the previous URL was the same, reuse the `bad` value.
+        // TODO: Only display check if the previous URL and file weren't the same.
+        let mut prev_bad = None;
+        let mut checked = false;
+        if let Some(prev_file_url) = prev_file_url {
+            if prev_file_url.url == *url {
+                prev_bad = Some(prev_file_url.bad);
+                checked = true;
+            }
+        }
+
+        // Print action message.
         if verbose {
-            util::set_and_unset_color(
-                &mut stdout,
-                if no_check {
-                    "Not checking"
-                } else if file_url.excluded {
-                    "Skipping"
-                } else {
-                    "Checking"
-                },
-                &COLOR_CHECK,
-            )?;
+            if no_check {
+                util::set_and_unset_color(&mut stdout, "Not checking", &COLOR_WARN)?;
+            } else if file_url.excluded {
+                util::set_and_unset_color(&mut stdout, "Skipping (excluded)", &COLOR_WARN)?;
+            } else if checked {
+                util::set_and_unset_color(&mut stdout, "Skipping (checked)", &COLOR_WARN)?;
+            } else {
+                util::set_and_unset_color(&mut stdout, "Checking", &COLOR_CHECK)?;
+            }
 
             writeln!(
                 stdout,
-                " {} ({}:{})",
+                " {} <{}:{}>",
                 url,
                 file_url.filepath.to_str().unwrap(),
                 file_url.line
             )?;
         }
 
-        // If the previous URL was the same, reuse the `bad` value.
-        // TODO: Only display check if the previous URL and file weren't the same.
-        let mut prev_bad = None;
-        if let Some(prev_file_url) = prev_file_url {
-            if prev_file_url.url == *url {
-                prev_bad = Some(prev_file_url.bad);
-            }
-        }
-        if prev_bad.is_none() {
-            num_urls += 1;
-        }
-
         // Process URL.
 
-        let bad = if let Some(prev_bad) = prev_bad {
-            prev_bad
+        let (bad, message) = if let Some(prev_bad) = prev_bad {
+            (
+                prev_bad,
+                Some("Previous bad URL was identical.".to_string()),
+            )
         } else if no_check || file_url.excluded {
-            None
+            (None, None)
         } else {
             // Check the URL.
-            Some(url_is_bad(&mut handle, &url)?)
+            match url_is_bad(&mut handle, &url, true)? {
+                Some(message) => (Some(true), Some(message)),
+                None => (Some(false), None),
+            }
         };
 
         if let Some(true) = bad {
@@ -339,11 +397,17 @@ fn check_urls(
 
                 writeln!(
                     stderr,
-                    " {} ({}:{})",
+                    " {} <{}:{}>",
                     url,
                     file_url.filepath.to_str().unwrap(),
                     file_url.line
                 )?;
+
+                if verbose {
+                    if let Some(message) = message {
+                        println!("{}", message);
+                    }
+                }
             }
 
             num_bad_urls += 1;
@@ -368,22 +432,49 @@ impl Handler for Collector {
 }
 
 // Initialize the curl handle which will be reused between calls.
-fn init_handle() -> Result<Easy2<Collector>> {
+fn init_handle(timeout: Option<u64>) -> Result<Easy2<Collector>> {
     let mut handle = Easy2::new(Collector(Vec::new()));
-    handle.get(true)?;
+
+    handle.useragent(&USER_AGENT)?;
+    if let Some(timeout) = timeout {
+        handle.timeout(Duration::from_secs(timeout))?;
+    }
+
     Ok(handle)
 }
 
-// Return `true` if the URL is bad.
+// Return `Some(error_message)` if the URL is bad.
 // TODO: add option for following/prohibiting redirects?
-fn url_is_bad(handle: &mut Easy2<Collector>, url: &str) -> Result<bool> {
-    handle.url(url)?;
+fn url_is_bad(handle: &mut Easy2<Collector>, url: &str, initial: bool) -> Result<Option<String>> {
+    if initial {
+        handle.url(url)?;
+    }
+
+    // Try a HEAD request first, followed by GET if that fails, as not all servers are
+    // configured for HEAD.
+    if initial {
+        handle.get(false)?;
+        handle.nobody(true)?;
+    } else {
+        handle.nobody(false)?;
+        handle.get(true)?;
+    }
 
     match handle.perform() {
         Ok(_) => (),
-        Err(_) => return Ok(true),
+        Err(e) => return Ok(Some(e.to_string())),
     }
 
     let code = handle.response_code()?;
-    Ok(code < 200 || code >= 400)
+    let bad = code < 200 || code >= 400;
+
+    if initial {
+        url_is_bad(handle, url, false)
+    } else {
+        Ok(if bad {
+            Some(format!("Response code: {}", code))
+        } else {
+            None
+        })
+    }
 }

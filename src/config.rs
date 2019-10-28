@@ -28,6 +28,8 @@ pub struct Config {
     pub no_ignore: bool,
     /// Silence standard, non-`verbose` output.
     pub silent: bool,
+    /// Timeout in seconds, if set.
+    pub timeout: Option<u64>,
     /// Display more information, such as every file name and URL processed.
     pub verbose: bool,
 }
@@ -90,6 +92,12 @@ impl Config {
     /// Set silent=true.
     pub fn silent(mut self) -> Self {
         self.silent = true;
+        self
+    }
+
+    /// Set timeout.
+    pub fn timeout(mut self, timeout: u64) -> Self {
+        self.timeout = Some(timeout);
         self
     }
 

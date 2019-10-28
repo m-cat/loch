@@ -1,9 +1,10 @@
 //! Command-line interface for loch.
 
 use clap::{
-    clap_app, crate_authors, crate_description, crate_version, AppSettings, ArgMatches, Values,
+    clap_app, crate_authors, crate_description, crate_version, AppSettings, Arg, ArgMatches, Values,
 };
 use loch::Config;
+use std::str::FromStr;
 
 // Split an input string by valid delimiters (spaces and commas).
 fn split_input(input: Values) -> Vec<String> {
@@ -58,6 +59,17 @@ impl<'a> Cli<'a> {
             (@arg input: ...
                 "The input files and/or directories to be checked")
         )
+        .arg(
+            Arg::from_usage(
+                "-t --timeout [SECS] 'Set the timeout for requests, in seconds. Not set by \
+                 default'",
+            )
+            .validator(|v| {
+                u64::from_str(&v)
+                    .map(|_| ())
+                    .map_err(|e| format!("'{}': {}", v, e))
+            }),
+        )
         .global_setting(AppSettings::ColoredHelp)
         .get_matches();
 
@@ -94,6 +106,10 @@ impl<'a> Cli<'a> {
             no_http: self.matches.is_present("no_http"),
             // Not for interactive use. Output can be sent to /dev/null if undesired.
             silent: false,
+            timeout: self
+                .matches
+                .value_of("timeout")
+                .map(|time| u64::from_str(time).unwrap()),
             verbose: self.matches.is_present("verbose"),
         }
     }

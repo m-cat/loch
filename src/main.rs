@@ -48,8 +48,7 @@ fn main() -> Result<()> {
 
                 process::exit(1);
             } else {
-                util::set_and_unset_color(&mut stdout, "No bad URLs found.", &COLOR_GOOD)?;
-                writeln!(&mut stdout)?;
+                util::set_and_unset_color(&mut stdout, "No bad URLs found.\n", &COLOR_GOOD)?;
 
                 if verbose {
                     writeln!(
