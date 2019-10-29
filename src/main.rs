@@ -39,12 +39,18 @@ fn main() -> Result<()> {
 
     // Begin logic.
 
-    match loch::check_paths(&input_paths, Some(&config)) {
+    let info = loch::check_paths(&input_paths, Some(&config));
+
+    match info {
         Ok(info) => {
+            writeln!(&mut stdout);
+
             if info.num_bad_urls > 0 {
-                stderr.set_color(&COLOR_ERR)?;
-                writeln!(&mut stderr, "({}) bad URLs found!", info.num_bad_urls)?;
-                stderr.reset()?;
+                util::set_and_unset_color(
+                    &mut stdout,
+                    &format!("({}) bad URLs found!", info.num_bad_urls),
+                    &COLOR_ERR,
+                );
 
                 process::exit(1);
             } else {
@@ -62,6 +68,8 @@ fn main() -> Result<()> {
             }
         }
         Err(error) => {
+            writeln!(&mut stderr);
+
             // If an error occurred, display it to stderr and return code 1.
 
             util::set_and_unset_color(&mut stderr, "error:", &COLOR_ERR)?;

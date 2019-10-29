@@ -21,6 +21,13 @@ Can find broken links in:
 + Code comments
 + ... and more!
 
+Useful for:
+
++ Websites
++ Documentation
++ Personal notes
++ ... and more!
+
 Short for "link out check" and pronounced "loch".
 
 ## Instructions

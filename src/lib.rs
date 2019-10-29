@@ -75,6 +75,12 @@ pub struct FileUrl {
     pub excluded: bool,
 }
 
+impl FileUrl {
+    fn file_ref(&self) -> String {
+        format!("[{}:{}]", self.filepath.to_str().unwrap(), self.line)
+    }
+}
+
 // NOTE: loch will check files more than once if they are passed in multiple times.
 /// "Link-out check" all paths passed in.
 /// Returns a list of `FileUrl` objects containing the URL and where it was found.
@@ -364,14 +370,12 @@ fn check_urls(
             } else {
                 util::set_and_unset_color(&mut stdout, "Checking", &COLOR_CHECK)?;
             }
+            write!(stdout, " ")?;
 
-            writeln!(
-                stdout,
-                " {} <{}:{}>",
-                url,
-                file_url.filepath.to_str().unwrap(),
-                file_url.line
-            )?;
+            writeln!(stdout, "{}", url)?;
+            util::set_and_unset_color(&mut stdout, &file_url.file_ref(), &COLOR_PARAM)?;
+
+            writeln!(stdout)?;
         }
 
         // Process URL.
@@ -393,15 +397,10 @@ fn check_urls(
 
         if let Some(true) = bad {
             if !silent {
-                util::set_and_unset_color(&mut stderr, "Bad url:", &COLOR_ERR)?;
-
-                writeln!(
-                    stderr,
-                    " {} <{}:{}>",
-                    url,
-                    file_url.filepath.to_str().unwrap(),
-                    file_url.line
-                )?;
+                util::set_and_unset_color(&mut stderr, "Bad url: ", &COLOR_ERR)?;
+                writeln!(stderr, "{}", url)?;
+                util::set_and_unset_color(&mut stderr, &file_url.file_ref(), &COLOR_PARAM)?;
+                writeln!(stderr)?;
 
                 if verbose {
                     if let Some(message) = message {
