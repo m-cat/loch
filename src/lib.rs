@@ -310,7 +310,7 @@ fn check_urls(
     for file_url in file_urls.iter() {
         match prev_file_url {
             Some(prev_file_url) => {
-                if prev_file_url.url == file_url.url {
+                if prev_file_url.url != file_url.url {
                     num_urls += 1;
                 }
             }

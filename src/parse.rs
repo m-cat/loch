@@ -4,7 +4,7 @@ use regex::Regex;
 // Gets the first URL in `line` and returns the rest of the line and the URL.
 pub fn get_urls(line: &str, no_http: bool) -> Vec<&str> {
     lazy_static! {
-        static ref FORBIDDEN: &'static str = r##" "<>\^`\{\|\}"##;
+        static ref FORBIDDEN: &'static str = r##" "'<>\^`\{\|\}"##;
         static ref INVALID: String = {
             let mut invalid = FORBIDDEN.to_string();
             invalid.push_str(r##"\s\[\]\(\),"##);
@@ -130,6 +130,11 @@ mod tests {
             "https://github.com/mola-T/flymd</a>.</p>",
             &["https://github.com/mola-T/flymd"]
         );
+
+        test_parse!(
+            "https://www.bytedude.com' https://' http://'",
+            &["https://www.bytedude.com"]
+        );
     }
 
     #[test]
@@ -224,6 +229,11 @@ mod tests {
         test_parse!(
             "//test.com/ ftp://test.com/page ://test.com/",
             &["test.com/", "ftp://test.com/page"]
+        );
+
+        test_parse!(
+            "https://www.bytedude.com' https://' http://'",
+            &["https://www.bytedude.com"]
         );
     }
 }
