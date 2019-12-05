@@ -19,6 +19,7 @@ curl = "0.4"
 ignore = "0.4"
 lazy_static = "1"
 termcolor = "1"
+url = "2"
 
 [dependencies.regex]
 version = "1"

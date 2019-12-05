@@ -48,14 +48,24 @@ pub fn get_urls(line: &str, no_http: bool) -> Vec<&str> {
 mod tests {
     use super::get_urls;
     use crate::{url, util::test_utils};
+    use ::url::Url;
 
     #[test]
     fn parse_urls_http() {
         macro_rules! test_parse {
             ($s:expr, $res:expr $(,)?) => {
-                assert!(url::split_pattern($s).is_some());
+                for url in $res {
+                    // Assert that `split_pattern` did not fail.
+                    assert!(url::split_pattern(url).is_some());
+
+                    // Assert that the URL is valid.
+                    Url::parse(url)
+                        .map_err(|e| format!("Error parsing {}: {:?}", url, e))
+                        .unwrap();
+                }
 
                 let mut urls = get_urls($s, false);
+
                 urls.sort();
                 urls.dedup();
                 test_utils::assert_list_eq(&urls, $res);
@@ -141,9 +151,15 @@ mod tests {
     fn parse_urls_nohttp() {
         macro_rules! test_parse {
             ($s:expr, $res:expr $(,)?) => {
-                assert!(url::split_pattern($s).is_some());
+                for url in $res {
+                    // Assert that `split_pattern` did not fail.
+                    assert!(url::split_pattern(url).is_some());
+
+                    // TODO: Assert that the nohttp URL is valid?
+                }
 
                 let mut urls = get_urls($s, true);
+
                 urls.sort();
                 urls.dedup();
                 test_utils::assert_list_eq(&urls, $res);

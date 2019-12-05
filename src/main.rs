@@ -43,14 +43,14 @@ fn main() -> Result<()> {
 
     match info {
         Ok(info) => {
-            writeln!(&mut stdout);
+            writeln!(&mut stdout)?;
 
             if info.num_bad_urls > 0 {
                 util::set_and_unset_color(
                     &mut stdout,
                     &format!("({}) bad URLs found!", info.num_bad_urls),
                     &COLOR_ERR,
-                );
+                )?;
 
                 process::exit(1);
             } else {
@@ -68,7 +68,7 @@ fn main() -> Result<()> {
             }
         }
         Err(error) => {
-            writeln!(&mut stderr);
+            writeln!(&mut stderr)?;
 
             // If an error occurred, display it to stderr and return code 1.
 

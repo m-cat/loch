@@ -336,7 +336,7 @@ fn check_urls(
                 if num_urls == 1 { "URL" } else { "URLs" }
             ),
             &COLOR_INFO,
-        );
+        )?;
     }
 
     // Begin logic.
